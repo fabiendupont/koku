@@ -34,6 +34,7 @@ from masu.database.cost_model_db_accessor import CostModelDBAccessor
 from masu.database.report_db_accessor_base import ReportDBAccessorBase
 from masu.processor import is_feature_flag_enabled_by_schema
 from masu.processor import OCP_GPU_COST_MODEL_UNLEASH_FLAG
+from masu.processor import OCP_INFERENCE_TOKEN_COST_MODEL_UNLEASH_FLAG
 from masu.util.common import filter_dictionary
 from masu.util.common import SummaryRangeConfig
 from masu.util.common import trino_table_exists
@@ -115,6 +116,7 @@ class OCPReportDBAccessor(SQLScriptAtomicExecutorMixin, ReportDBAccessorBase):
         sql_params["month"] = start_date.strftime("%m")
 
         self._populate_gpu_ui_summary_table_with_usage_only(sql_params)
+        self._populate_inference_token_ui_summary_table(sql_params)
         if summary_range.summarize_previous_month and not summary_range.is_current_month:
             # Don't resummarize virtualization UI table if we are summarizing previous month
             return
@@ -189,6 +191,79 @@ class OCPReportDBAccessor(SQLScriptAtomicExecutorMixin, ReportDBAccessorBase):
         else:
             # SaaS: execute via Trino
             self._execute_trino_multipart_sql_query(populate_gpu_usage_info, bind_params=sql_params)
+
+    def _populate_inference_token_ui_summary_table(self, params):
+        """
+        Populates the inference token summary table with token usage information
+        whenever inference token data exists for the source.
+        """
+        sql_params = copy.deepcopy(params)
+        source_uuid = sql_params.get("source_uuid")
+
+        is_onprem = self.get_sql_folder_name() == "self_hosted_sql"
+
+        if is_onprem:
+            # On-prem: check if inference token data exists in PostgreSQL.
+            # The table may not exist yet if no inference data has been ingested.
+            try:
+                from django_tenants.utils import schema_context
+
+                with schema_context(self.schema):
+                    from django.db import connection
+
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                            "WHERE table_schema = %s AND table_name = %s)",
+                            [self.schema, "openshift_inference_token_usage_line_items"],
+                        )
+                        if not cursor.fetchone()[0]:
+                            return
+            except Exception:
+                return
+        else:
+            # SaaS mode: check Trino tables
+            inference_table = "openshift_inference_token_usage_line_items_daily"
+            if not trino_table_exists(self.schema, inference_table):
+                return
+            source_sql = get_report_db_accessor().get_check_source_in_partitions_sql(
+                schema_name=self.schema, table_name=inference_table, source_uuid=source_uuid
+            )
+            result = self._execute_trino_raw_sql_query(
+                source_sql,
+                log_ref=f"Checking if source is in {inference_table}",
+            )
+            if not result or not result[0][0]:
+                return
+
+        cluster_id = get_cluster_id_from_provider(sql_params.get("source_uuid"))
+        if not cluster_id:
+            LOG.info(
+                log_json(
+                    msg="No cluster_id found for source, skipping inference token UI table population.",
+                    context=sql_params,
+                )
+            )
+            return
+
+        sql_params["cluster_id"] = cluster_id
+        sql_params["cluster_alias"] = get_cluster_alias_from_cluster_id(cluster_id)
+        sql_params["source_uuid"] = str(sql_params["source_uuid"])
+        populate_inference_token_info = pkgutil.get_data(
+            "masu.database",
+            f"{self.get_sql_folder_name()}/openshift/ui_summary/reporting_ocp_inference_token_summary_p.sql",
+        )
+        populate_inference_token_info = populate_inference_token_info.decode("utf-8")
+
+        if is_onprem:
+            self._prepare_and_execute_raw_sql_query(
+                "reporting_ocp_inference_token_summary_p",
+                populate_inference_token_info,
+                sql_params,
+                operation="INSERT",
+            )
+        else:
+            self._execute_trino_multipart_sql_query(populate_inference_token_info, bind_params=sql_params)
 
     def _reporting_period_has_gpu_data(self, source_uuid: uuid.UUID, start_date) -> bool:
         """
@@ -1449,7 +1524,14 @@ AND (month = replace(ltrim(replace('{month}', '0', ' ')),' ', '0') OR month = '{
         vm_table_exists = trino_table_exists(self.schema, "openshift_vm_usage_line_items")
         gpu_table_exists = trino_table_exists(self.schema, "openshift_gpu_usage_line_items_daily")
         requires_vm_table = [metric_constants.OCP_VM_CORE_HOUR, metric_constants.OCP_VM_CORE_MONTH]
+        inference_token_table_exists = trino_table_exists(
+            self.schema, "openshift_inference_token_usage_line_items_daily"
+        )
         requires_gpu_table = [metric_constants.OCP_GPU_MONTH]
+        requires_inference_token_table = [
+            metric_constants.OCP_INFERENCE_INPUT_TOKEN,
+            metric_constants.OCP_INFERENCE_OUTPUT_TOKEN,
+        ]
 
         metric_metadata = {
             metric_constants.OCP_VM_HOUR: {
@@ -1476,6 +1558,16 @@ AND (month = replace(ltrim(replace('{month}', '0', ' ')),' ', '0') OR month = '{
                 "file_path": f"{self.get_sql_folder_name()}/openshift/cost_model/monthly_cost_gpu.sql",
                 "metric_params": {**monthly_params, **cluster_params},
             },
+            metric_constants.OCP_INFERENCE_INPUT_TOKEN: {
+                "log_msg": "populating inference input token costs",
+                "file_path": f"{self.get_sql_folder_name()}/openshift/cost_model/monthly_cost_inference_token.sql",
+                "metric_params": {**monthly_params, **cluster_params},
+            },
+            metric_constants.OCP_INFERENCE_OUTPUT_TOKEN: {
+                "log_msg": "populating inference output token costs",
+                "file_path": f"{self.get_sql_folder_name()}/openshift/cost_model/monthly_cost_inference_token.sql",
+                "metric_params": {**monthly_params, **cluster_params},
+            },
             metric_constants.OCP_PROJECT_MONTH: {
                 "log_msg": "populating monthly project tag costs",
                 "file_path": f"{self.get_sql_folder_name()}/openshift/cost_model/monthly_project_tag_based.sql",
@@ -1497,6 +1589,16 @@ AND (month = replace(ltrim(replace('{month}', '0', ' ')),' ', '0') OR month = '{
 
             if name in requires_gpu_table and not gpu_table_exists:
                 continue
+
+            if name in requires_inference_token_table and not inference_token_table_exists:
+                continue
+
+            # Check Unleash flag for inference token cost model
+            if name in (metric_constants.OCP_INFERENCE_INPUT_TOKEN, metric_constants.OCP_INFERENCE_OUTPUT_TOKEN):
+                if not is_feature_flag_enabled_by_schema(
+                    self.schema, OCP_INFERENCE_TOKEN_COST_MODEL_UNLEASH_FLAG, dev_fallback=True
+                ):
+                    continue
 
             # Check Unleash flag for GPU cost model
             if name == metric_constants.OCP_GPU_MONTH:

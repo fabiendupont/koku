@@ -8,6 +8,7 @@ import copy
 from api.models import Provider
 from masu.processor import is_feature_flag_enabled_by_schema
 from masu.processor import OCP_GPU_COST_MODEL_UNLEASH_FLAG
+from masu.processor import OCP_INFERENCE_TOKEN_COST_MODEL_UNLEASH_FLAG
 
 """Model for our cost model metric map."""
 OCP_METRIC_CPU_CORE_USAGE_HOUR = "cpu_core_usage_per_hour"
@@ -31,6 +32,8 @@ OCP_VM_CORE_MONTH = "vm_core_cost_per_month"
 OCP_VM_CORE_HOUR = "vm_core_cost_per_hour"
 OCP_PROJECT_MONTH = "project_per_month"
 OCP_GPU_MONTH = "gpu_cost_per_month"
+OCP_INFERENCE_INPUT_TOKEN = "inference_input_token_cost_per_token"
+OCP_INFERENCE_OUTPUT_TOKEN = "inference_output_token_cost_per_token"
 
 CPU = "cpu"
 MEM = "memory"
@@ -63,6 +66,8 @@ METRIC_CHOICES = (
     OCP_VM_CORE_MONTH,
     OCP_VM_CORE_HOUR,
     OCP_GPU_MONTH,
+    OCP_INFERENCE_INPUT_TOKEN,
+    OCP_INFERENCE_OUTPUT_TOKEN,
 )
 
 COST_TYPE_CHOICES = (
@@ -284,6 +289,25 @@ UNLEASH_METRICS_GPU = {
     },
 }
 
+UNLEASH_METRICS_INFERENCE_TOKEN = {
+    "inference_input_token_cost_per_token": {
+        "source_type": "OCP",
+        "metric": "inference_input_token_cost_per_token",
+        "label_metric": "Inference Token",
+        "label_measurement": "Input",
+        "label_measurement_unit": "tokens",
+        "default_cost_type": "Supplementary",
+    },
+    "inference_output_token_cost_per_token": {
+        "source_type": "OCP",
+        "metric": "inference_output_token_cost_per_token",
+        "label_metric": "Inference Token",
+        "label_measurement": "Output",
+        "label_measurement_unit": "tokens",
+        "default_cost_type": "Supplementary",
+    },
+}
+
 
 def get_cost_model_metrics_map(schema=None):
     map_copy = copy.deepcopy(COST_MODEL_METRIC_MAP)
@@ -291,6 +315,10 @@ def get_cost_model_metrics_map(schema=None):
     # Check GPU unleash flag
     if is_feature_flag_enabled_by_schema(schema, OCP_GPU_COST_MODEL_UNLEASH_FLAG, dev_fallback=True):
         map_copy |= copy.deepcopy(UNLEASH_METRICS_GPU)
+
+    # Check inference token unleash flag
+    if is_feature_flag_enabled_by_schema(schema, OCP_INFERENCE_TOKEN_COST_MODEL_UNLEASH_FLAG, dev_fallback=True):
+        map_copy |= copy.deepcopy(UNLEASH_METRICS_INFERENCE_TOKEN)
 
     return map_copy
 

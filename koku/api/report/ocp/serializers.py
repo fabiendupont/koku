@@ -451,6 +451,73 @@ class OCPGpuQueryParamSerializer(OCPQueryParamSerializer):
         super().__init__(*args, **kwargs)
 
 
+class OCPInferenceTokenGroupBySerializer(GroupSerializer):
+    """Serializer for handling inference token query parameter group_by."""
+
+    _opfields = ("cluster", "node", "project", "model_name", "inference_service")
+
+    cluster = StringOrListField(child=serializers.CharField(), required=False)
+    node = StringOrListField(child=serializers.CharField(), required=False)
+    project = StringOrListField(child=serializers.CharField(), required=False)
+    model_name = StringOrListField(child=serializers.CharField(), required=False)
+    inference_service = StringOrListField(child=serializers.CharField(), required=False)
+
+
+class OCPInferenceTokenFilterSerializer(BaseFilterSerializer):
+    """Serializer for handling inference token query parameter filter."""
+
+    _opfields = ("cluster", "node", "project", "model_name", "inference_service")
+
+    cluster = StringOrListField(child=serializers.CharField(), required=False)
+    node = StringOrListField(child=serializers.CharField(), required=False)
+    project = StringOrListField(child=serializers.CharField(), required=False)
+    model_name = StringOrListField(child=serializers.CharField(), required=False)
+    inference_service = StringOrListField(child=serializers.CharField(), required=False)
+
+
+class OCPInferenceTokenOrderBySerializer(OrderSerializer):
+    """Serializer for handling inference token query parameter order_by."""
+
+    _opfields = ("date", "model_name", "inference_service", "input_tokens", "output_tokens", "total_tokens", "cost")
+    _op_mapping = {
+        "cost": "cost_total",
+    }
+
+    date = serializers.DateField(required=False)
+    model_name = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    inference_service = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    input_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    output_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    total_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    cost_total = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+
+
+class OCPInferenceTokenQueryParamSerializer(OCPQueryParamSerializer):
+    """Serializer for handling inference token query parameters."""
+
+    order_by_allowlist = (
+        "cost_total",
+        "model_name",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+    )
+
+    GROUP_BY_SERIALIZER = OCPInferenceTokenGroupBySerializer
+    FILTER_SERIALIZER = OCPInferenceTokenFilterSerializer
+    ORDER_BY_SERIALIZER = OCPInferenceTokenOrderBySerializer
+
+    def __init__(self, *args, **kwargs):
+        """Strip tag keys from filter/exclude/group_by so nested serializers are created with cleaned data."""
+        if "data" in kwargs and kwargs["data"]:
+            data = dict(kwargs["data"])
+            for key in ("filter", "exclude", "group_by"):
+                if key in data and data[key]:
+                    data[key] = _strip_tag_keys_from_param_dict(data[key])
+            kwargs = {**kwargs, "data": data}
+        super().__init__(*args, **kwargs)
+
+
 class OCPMigProfilesFilterSerializer(BaseFilterSerializer):
     """Serializer for handling MIG profiles filter parameters.
 

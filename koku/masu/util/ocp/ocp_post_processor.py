@@ -212,6 +212,8 @@ class OCPPostProcessor:
             "vm_disk_allocated_size_byte_seconds": safe_float,
             "gpu_memory_capacity_mib": safe_float,
             "gpu_pod_uptime": safe_float,
+            "input_tokens": safe_float,
+            "output_tokens": safe_float,
             # MIG fields - convert empty strings to None for nullable columns
             "mig_slice_count": safe_int_or_none,
             "gpu_max_slices": safe_int_or_none,
@@ -335,6 +337,30 @@ class OCPPostProcessor:
 
         return data_frame
 
+    def _normalize_inference_token_data(self, data_frame):
+        """Normalize inference token data: model names and token counts."""
+        if self.report_type != "inference_token_usage":
+            return data_frame
+
+        # Normalize model names (strip special chars, lowercase — similar to GPU model name normalization)
+        if "model_name" in data_frame.columns:
+            data_frame["model_name"] = (
+                data_frame["model_name"].str.replace(r"[^a-zA-Z0-9]+", " ", regex=True).str.strip().str.lower()
+            )
+
+        # Normalize inference service names (strip special chars, lowercase)
+        if "inference_service" in data_frame.columns:
+            data_frame["inference_service"] = (
+                data_frame["inference_service"].str.replace(r"[^a-zA-Z0-9]+", " ", regex=True).str.strip().str.lower()
+            )
+
+        # Ensure non-negative token counts
+        for col in ("input_tokens", "output_tokens"):
+            if col in data_frame.columns:
+                data_frame[col] = data_frame[col].clip(lower=0)
+
+        return data_frame
+
     def process_dataframe(self, data_frame, filename):
         data_frame = self._remove_anomalies(data_frame, filename)
         label_columns = {
@@ -362,6 +388,9 @@ class OCPPostProcessor:
 
         # Populate MIG fields from profile for GPU reports
         data_frame = self._populate_mig_fields_from_profile(data_frame)
+
+        # Normalize inference token data
+        data_frame = self._normalize_inference_token_data(data_frame)
 
         return data_frame, self._generate_daily_data(data_frame)
 
