@@ -50,6 +50,7 @@ class OCPReportTypes(Enum):
     NAMESPACE_LABELS = 4
     VM_USAGE = 5
     GPU_USAGE = 6
+    INFERENCE_TOKEN_USAGE = 7
 
 
 STORAGE_COLUMNS = {
@@ -284,6 +285,30 @@ GPU_AGG = {
     "mig_strategy": ["max"],
 }
 
+INFERENCE_TOKEN_USAGE_COLUMNS = {
+    "report_period_start",
+    "report_period_end",
+    "interval_start",
+    "interval_end",
+    "node",
+    "namespace",
+    "pod",
+    "model_name",
+    "inference_service",
+    "input_tokens",
+    "output_tokens",
+}
+
+INFERENCE_TOKEN_GROUP_BY = ["namespace", "pod", "model_name", "inference_service"]
+
+INFERENCE_TOKEN_AGG = {
+    "report_period_start": ["max"],
+    "report_period_end": ["max"],
+    "node": ["max"],
+    "input_tokens": ["sum"],
+    "output_tokens": ["sum"],
+}
+
 # MIG (Multi-Instance GPU) configuration
 # Max slices by GPU model - used to determine parent gpu max slices
 GPU_MAX_SLICES_BY_MODEL = {
@@ -345,6 +370,13 @@ OCP_REPORT_TYPES = {
         "group_by": GPU_GROUP_BY,
         "agg": GPU_AGG,
         "new_required_columns": GPU_USAGE_NEWV_COLUMNS_AND_TYPES,
+    },
+    "inference_token_usage": {
+        "columns": INFERENCE_TOKEN_USAGE_COLUMNS,
+        "enum": OCPReportTypes.INFERENCE_TOKEN_USAGE,
+        "group_by": INFERENCE_TOKEN_GROUP_BY,
+        "agg": INFERENCE_TOKEN_AGG,
+        "new_required_columns": {},
     },
 }
 

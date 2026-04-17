@@ -1036,6 +1036,54 @@ class OCPGpuSummaryP(models.Model):
     cost_model_rate_type = models.TextField(null=True)
 
 
+class OCPInferenceTokenSummaryP(models.Model):
+    """A summarized partitioned table for inference token cost queries.
+
+    This table gives a daily breakdown of inference token costs.
+    """
+
+    class PartitionInfo:
+        partition_type = "RANGE"
+        partition_cols = ["usage_start"]
+
+    class Meta:
+        """Meta for OCPInferenceTokenSummaryP."""
+
+        db_table = "reporting_ocp_inference_token_summary_p"
+        indexes = [
+            models.Index(fields=["usage_start"], name="ocpinftoksumm_usage_start"),
+            models.Index(fields=["cluster_id"], name="ocpinftoksumm_cluster_idx"),
+            models.Index(fields=["namespace"], name="ocpinftoksumm_namespace_idx"),
+            models.Index(fields=["model_name"], name="ocpinftoksumm_model_idx"),
+        ]
+
+    id = models.UUIDField(primary_key=True)
+    cluster_id = models.TextField()
+    cluster_alias = models.TextField(null=True)
+    namespace = models.CharField(max_length=253, null=True)
+    node = models.CharField(max_length=253, null=True)
+    usage_start = models.DateField(null=False)
+    usage_end = models.DateField(null=False)
+
+    # Inference token specific fields
+    model_name = models.CharField(max_length=253, null=True)
+    inference_service = models.CharField(max_length=253, null=True)
+    input_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)
+    output_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)
+    total_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)
+
+    # Cost fields
+    cost_model_inference_cost = models.DecimalField(max_digits=33, decimal_places=15, null=True)
+    cost_model_rate_type = models.TextField(null=True)
+
+    # Metadata
+    source_uuid = models.ForeignKey(
+        "reporting.TenantAPIProvider", on_delete=models.CASCADE, unique=False, null=True, db_column="source_uuid"
+    )
+    cost_category = models.ForeignKey("OpenshiftCostCategory", on_delete=models.CASCADE, null=True)
+    raw_currency = models.TextField(null=True)
+
+
 # Import on-prem line item models so Django can discover them for migrations
 # These models are only used when ONPREM=True, but need to be discoverable for migrations
 from reporting.provider.ocp.self_hosted_models import OCPGPUUsageLineItem  # noqa: E402, F401
