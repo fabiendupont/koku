@@ -79,6 +79,7 @@ from api.views import OCPGCPTagView
 from api.views import OCPGpuModelsView
 from api.views import OCPGpuVendorsView
 from api.views import OCPGpuView
+from api.views import OCPInferenceTokenView
 from api.views import OCPMemoryView
 from api.views import OCPMigProfilesView
 from api.views import OCPNetworkView
@@ -343,6 +344,13 @@ urlpatterns = [
             OCPMigProfilesView.as_view()
         ),
         name="reports-openshift-gpu-mig-profiles",
+    ),
+    path(
+        "reports/openshift/inference-tokens/",
+        cache_page(timeout=settings.CACHE_MIDDLEWARE_SECONDS, cache=CacheEnum.api, key_prefix=OPENSHIFT_CACHE_PREFIX)(
+            OCPInferenceTokenView.as_view()
+        ),
+        name="reports-openshift-inference-tokens",
     ),
     path(
         "reports/openshift/infrastructures/all/costs/",

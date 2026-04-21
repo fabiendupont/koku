@@ -35,6 +35,7 @@ from reporting.provider.ocp.models import OCPCostSummaryByNodeP
 from reporting.provider.ocp.models import OCPCostSummaryByProjectP
 from reporting.provider.ocp.models import OCPCostSummaryP
 from reporting.provider.ocp.models import OCPGpuSummaryP
+from reporting.provider.ocp.models import OCPInferenceTokenSummaryP
 from reporting.provider.ocp.models import OCPNetworkSummaryByNodeP
 from reporting.provider.ocp.models import OCPNetworkSummaryByProjectP
 from reporting.provider.ocp.models import OCPNetworkSummaryP
@@ -182,6 +183,23 @@ class OCPProviderMap(ProviderMap):
                 * Coalesce("exchange_rate", Value(1, output_field=DecimalField())),
             )
 
+    def __cost_model_inference_cost(self, cost_model_rate_type=None):
+        """Return ORM term for inference token cost model cost"""
+        if cost_model_rate_type:
+            return Sum(
+                Case(
+                    When(
+                        cost_model_rate_type=cost_model_rate_type,
+                        then=Coalesce(F("cost_model_inference_cost"), Value(0, output_field=DecimalField())),
+                    ),
+                    default=Value(0, output_field=DecimalField()),
+                )
+            )
+        else:
+            return Sum(
+                Coalesce(F("cost_model_inference_cost"), Value(0, output_field=DecimalField()))
+            )
+
     def __cost_model_distributed_cost(self, cost_model_rate_type, exchange_rate_column):
         return Sum(
             Case(
@@ -257,6 +275,9 @@ class OCPProviderMap(ProviderMap):
                     "gpu_model": {"field": "model_name", "operation": "icontains"},
                     "gpu_mode": {"field": "gpu_mode", "operation": "icontains"},
                     "mig_profile": {"field": "mig_profile", "operation": "icontains"},
+                    "model_name": {"field": "model_name", "operation": "icontains"},
+                    "inference_service": {"field": "inference_service", "operation": "icontains"},
+                    "organization": {"field": "organization", "operation": "icontains"},
                     "infrastructures": {
                         "field": "cluster_id",
                         "operation": "exact",
@@ -1172,6 +1193,79 @@ class OCPProviderMap(ProviderMap):
                         "cost_units_key": "raw_currency",
                         "sum_columns": [],
                     },
+                    "inference_tokens": {
+                        "tables": {"query": OCPInferenceTokenSummaryP},
+                        "report_type_annotations": {},
+                        "group_by_options": [
+                            "cluster",
+                            "project",
+                            "node",
+                            "model_name",
+                            "inference_service",
+                            "organization",
+                        ],
+                        "tag_column": "all_labels",
+                        "aggregates": {
+                            "sup_raw": Sum(Value(0, output_field=DecimalField())),
+                            "sup_usage": self.__cost_model_inference_cost(cost_model_rate_type="Supplementary"),
+                            "sup_markup": Sum(Value(0, output_field=DecimalField())),
+                            "sup_total": self.__cost_model_inference_cost(cost_model_rate_type="Supplementary"),
+                            "infra_raw": Sum(Value(0, output_field=DecimalField())),
+                            "infra_usage": self.__cost_model_inference_cost(cost_model_rate_type="Infrastructure"),
+                            "infra_markup": Sum(Value(0, output_field=DecimalField())),
+                            "infra_total": self.__cost_model_inference_cost(cost_model_rate_type="Infrastructure"),
+                            "cost_raw": Sum(Value(0, output_field=DecimalField())),
+                            "cost_usage": self.__cost_model_inference_cost(),
+                            "cost_markup": Sum(Value(0, output_field=DecimalField())),
+                            "cost_total": self.__cost_model_inference_cost(),
+                        },
+                        "default_ordering": {"cost_total": "desc"},
+                        "capacity_aggregate": {},
+                        "annotations": {
+                            "sup_raw": Sum(Value(0, output_field=DecimalField())),
+                            "sup_usage": self.__cost_model_inference_cost(cost_model_rate_type="Supplementary"),
+                            "sup_markup": Sum(Value(0, output_field=DecimalField())),
+                            "sup_total": self.__cost_model_inference_cost(cost_model_rate_type="Supplementary"),
+                            "infra_raw": Sum(Value(0, output_field=DecimalField())),
+                            "infra_usage": self.__cost_model_inference_cost(cost_model_rate_type="Infrastructure"),
+                            "infra_markup": Sum(Value(0, output_field=DecimalField())),
+                            "infra_total": self.__cost_model_inference_cost(cost_model_rate_type="Infrastructure"),
+                            "cost_raw": Sum(Value(0, output_field=DecimalField())),
+                            "cost_usage": self.__cost_model_inference_cost(),
+                            "cost_markup": Sum(Value(0, output_field=DecimalField())),
+                            "cost_total": self.__cost_model_inference_cost(),
+                            "cost_units": Coalesce("currency_annotation", Value("USD", output_field=CharField())),
+                            "clusters": ArrayAgg(
+                                Coalesce("cluster_alias", "cluster_id"), distinct=True, default=Value([])
+                            ),
+                            "source_uuid": ArrayAgg(
+                                F("source_uuid"),
+                                filter=Q(source_uuid__isnull=False),
+                                distinct=True,
+                                default=Value([]),
+                            ),
+                            "input_tokens": Sum(
+                                Coalesce(F("input_tokens"), Value(0, output_field=DecimalField()))
+                            ),
+                            "output_tokens": Sum(
+                                Coalesce(F("output_tokens"), Value(0, output_field=DecimalField()))
+                            ),
+                            "total_tokens": Sum(
+                                Coalesce(F("total_tokens"), Value(0, output_field=DecimalField()))
+                            ),
+                        },
+                        "delta_key": {},
+                        "filter": [],
+                        "cost_units_key": "raw_currency",
+                        "sum_columns": [
+                            "cost_total",
+                            "sup_total",
+                            "infra_total",
+                            "input_tokens",
+                            "output_tokens",
+                            "total_tokens",
+                        ],
+                    },
                     "virtual_machines": {
                         "tag_column": "pod_labels",
                         "aggregates": {
@@ -1355,6 +1449,9 @@ class OCPProviderMap(ProviderMap):
             "gpu": {
                 "default": OCPGpuSummaryP,
             },
+            "inference_tokens": {
+                "default": OCPInferenceTokenSummaryP,
+            },
         }
         super().__init__(provider, report_type, schema_name)
 
@@ -1432,6 +1529,21 @@ class OCPProviderMap(ProviderMap):
     def cost_model_gpu_cost(self):
         """Return all GPU cost model costs."""
         return self.__cost_model_gpu_cost()
+
+    @cached_property
+    def cost_model_inference_supplementary_cost(self):
+        """Return supplementary inference token cost model costs."""
+        return self.__cost_model_inference_cost(cost_model_rate_type="Supplementary")
+
+    @cached_property
+    def cost_model_inference_infrastructure_cost(self):
+        """Return infrastructure inference token cost model costs."""
+        return self.__cost_model_inference_cost(cost_model_rate_type="Infrastructure")
+
+    @cached_property
+    def cost_model_inference_cost(self):
+        """Return all inference token cost model costs."""
+        return self.__cost_model_inference_cost()
 
     @cached_property
     def cloud_infrastructure_cost(self):
