@@ -73,6 +73,8 @@ class OCPReportParquetProcessor(ReportParquetProcessorBase):
             "mig_slice_count",
             "gpu_max_slices",
             "mig_memory_capacity_mib",
+            "input_tokens",
+            "output_tokens",
             "reportnumhours",  # this is a calculated column and not part of the report
         ]
         date_columns = ["report_period_start", "report_period_end", "interval_start", "interval_end"]

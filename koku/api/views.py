@@ -44,6 +44,7 @@ from api.report.gcp.view import GCPStorageView
 from api.report.ocp.view import OCPCostView
 from api.report.ocp.view import OCPCpuView
 from api.report.ocp.view import OCPGpuView
+from api.report.ocp.view import OCPInferenceTokenView
 from api.report.ocp.view import OCPMemoryView
 from api.report.ocp.view import OCPMigProfilesView
 from api.report.ocp.view import OCPNetworkView

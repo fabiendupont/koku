@@ -2077,6 +2077,114 @@
                 ]
             }
         },
+        "/reports/openshift/inference-tokens/": {
+            "get": {
+                "tags": [
+                    "OpenShift Reports"
+                ],
+                "summary": "Query to obtain OpenShift inference token usage information",
+                "operationId": "getOpenShiftInferenceTokenReports",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/QueryFilter"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryGroupBy"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryOrderBy"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryOffset"
+                    },
+                    {
+                        "$ref": "#/components/parameters/ReportQueryLimit"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryStartDate"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryEndDate"
+                    },
+                    {
+                        "name": "filter[inference_service]",
+                        "in": "query",
+                        "required": false,
+                        "description": "Filter by KServe InferenceService name",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "group_by[inference_service]",
+                        "in": "query",
+                        "required": false,
+                        "description": "Group by KServe InferenceService name",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter[organization]",
+                        "in": "query",
+                        "required": false,
+                        "description": "Filter by organization identity (Keycloak realm / OSAC org)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "group_by[organization]",
+                        "in": "query",
+                        "required": false,
+                        "description": "Group by organization identity",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "A paginated report object",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReportOpenShiftInferenceTokens"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReportOpenShiftInferenceTokens"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "500": {
+                        "description": "Unexpected Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "basic_auth": []
+                    }
+                ]
+            }
+        },
         "/reports/openshift/resources/virtual-machines/": {
             "get": {
                 "tags": [
@@ -11252,6 +11360,95 @@
                                                         },
                                                         "total": {
                                                             "value": 600.0,
+                                                            "units": "USD"
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            "ReportOpenShiftInferenceTokens": {
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Report"
+                    },
+                    {
+                        "type": "object",
+                        "required": [
+                            "data"
+                        ],
+                        "properties": {
+                            "data": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "example": [
+                                        {
+                                            "date": "2025-01",
+                                            "values": [
+                                                {
+                                                    "date": "2025-01",
+                                                    "cluster": "my-ocp-cluster",
+                                                    "model_name": "llama-3-8b",
+                                                    "inference_service": "llama-3-8b-service",
+                                                    "organization": "acme-corp",
+                                                    "input_tokens": {
+                                                        "value": 1500000.0,
+                                                        "units": "tokens"
+                                                    },
+                                                    "output_tokens": {
+                                                        "value": 500000.0,
+                                                        "units": "tokens"
+                                                    },
+                                                    "total_tokens": {
+                                                        "value": 2000000.0,
+                                                        "units": "tokens"
+                                                    },
+                                                    "infrastructure": {
+                                                        "raw": {
+                                                            "value": 0.0,
+                                                            "units": "USD"
+                                                        },
+                                                        "markup": {
+                                                            "value": 0.0,
+                                                            "units": "USD"
+                                                        },
+                                                        "total": {
+                                                            "value": 0.0,
+                                                            "units": "USD"
+                                                        }
+                                                    },
+                                                    "supplementary": {
+                                                        "raw": {
+                                                            "value": 0.0,
+                                                            "units": "USD"
+                                                        },
+                                                        "markup": {
+                                                            "value": 0.0,
+                                                            "units": "USD"
+                                                        },
+                                                        "total": {
+                                                            "value": 0.0,
+                                                            "units": "USD"
+                                                        }
+                                                    },
+                                                    "cost": {
+                                                        "raw": {
+                                                            "value": 0.0,
+                                                            "units": "USD"
+                                                        },
+                                                        "markup": {
+                                                            "value": 0.0,
+                                                            "units": "USD"
+                                                        },
+                                                        "total": {
+                                                            "value": 0.0,
                                                             "units": "USD"
                                                         }
                                                     }

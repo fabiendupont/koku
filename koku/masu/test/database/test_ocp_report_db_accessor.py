@@ -1889,3 +1889,173 @@ class OCPReportDBAccessorGPUUITest(MasuTestCase):
             # Should use populate_vm_tmp_table.sql (fallback) instead of populate_vm_tmp_table_with_vm_report.sql
             sql_files_used = [str(call) for call in calls]
             self.assertTrue(any("populate_vm_tmp_table.sql" in s for s in sql_files_used))
+
+
+class OCPReportDBAccessorInferenceTokenTest(MasuTestCase):
+    """Test Cases for inference token cost model and UI summary table population."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        super().setUp()
+        self.accessor = OCPReportDBAccessor(schema=self.schema)
+        self.sql_params = {
+            "start_date": self.dh.this_month_start.date(),
+            "end_date": self.dh.this_month_end.date(),
+            "source_uuid": self.ocp_provider.uuid,
+            "year": str(self.dh.this_month_start.year),
+            "month": f"{self.dh.this_month_start.month:02d}",
+        }
+
+    @patch("masu.database.ocp_report_db_accessor.trino_table_exists", return_value=True)
+    @patch("masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_multipart_sql_query")
+    def test_monthly_populate_inference_token_tag_based_costs(self, mock_trino_exec, mock_trino_exists):
+        """Test monthly population of inference token tag based costs."""
+        test_mapping = {
+            metric_constants.OCP_INFERENCE_INPUT_TOKEN: [
+                {
+                    "rate_type": "Supplementary",
+                    "tag_key": "vllm",
+                    "value_rates": {"llama-3-70b": 0.00001, "mistral-7b": 0.000001},
+                    "default_rate": 0.00001,
+                },
+            ]
+        }
+        with self.accessor as acc:
+            acc.populate_tag_based_costs(
+                self.start_date,
+                self.dh.this_month_end,
+                self.ocp_provider_uuid,
+                test_mapping,
+                {"cluster_id": "test", "cluster_alias": "test"},
+            )
+            mock_trino_exec.assert_called()
+
+    @patch("masu.database.ocp_report_db_accessor.trino_table_exists", return_value=True)
+    @patch("masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_multipart_sql_query")
+    def test_monthly_populate_inference_output_token_costs(self, mock_trino_exec, mock_trino_exists):
+        """Test monthly population of inference output token costs."""
+        test_mapping = {
+            metric_constants.OCP_INFERENCE_OUTPUT_TOKEN: [
+                {
+                    "rate_type": "Supplementary",
+                    "tag_key": "vllm",
+                    "value_rates": {"llama-3-70b": 0.00003},
+                    "default_rate": 0.00003,
+                },
+            ]
+        }
+        with self.accessor as acc:
+            acc.populate_tag_based_costs(
+                self.start_date,
+                self.dh.this_month_end,
+                self.ocp_provider_uuid,
+                test_mapping,
+                {"cluster_id": "test", "cluster_alias": "test"},
+            )
+            mock_trino_exec.assert_called()
+
+    @patch("masu.database.ocp_report_db_accessor.is_feature_flag_enabled_by_schema", return_value=False)
+    @patch("masu.database.ocp_report_db_accessor.trino_table_exists", return_value=True)
+    @patch("masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_multipart_sql_query")
+    def test_inference_token_cost_model_disabled_by_unleash(
+        self, mock_trino_exec, mock_trino_exists, mock_feature_flag
+    ):
+        """Test that inference token cost model is skipped when Unleash flag is disabled."""
+        test_mapping = {
+            metric_constants.OCP_INFERENCE_INPUT_TOKEN: [
+                {
+                    "rate_type": "Supplementary",
+                    "tag_key": "vllm",
+                    "value_rates": {"llama-3-70b": 0.00001},
+                    "default_rate": 0.00001,
+                }
+            ]
+        }
+        with self.accessor as acc:
+            acc.populate_tag_based_costs(
+                self.start_date,
+                self.dh.this_month_end,
+                self.ocp_provider_uuid,
+                test_mapping,
+                {"cluster_id": "test", "cluster_alias": "test"},
+            )
+            mock_trino_exec.assert_not_called()
+
+    @patch("masu.database.ocp_report_db_accessor.trino_table_exists", return_value=False)
+    @patch("masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_multipart_sql_query")
+    def test_inference_token_costs_skipped_when_no_table(self, mock_trino_exec, mock_trino_exists):
+        """Test that inference token costs are skipped when line items table does not exist."""
+        test_mapping = {
+            metric_constants.OCP_INFERENCE_INPUT_TOKEN: [
+                {
+                    "rate_type": "Supplementary",
+                    "tag_key": "vllm",
+                    "value_rates": {"llama-3-70b": 0.00001},
+                    "default_rate": 0.00001,
+                }
+            ]
+        }
+        with self.accessor as acc:
+            acc.populate_tag_based_costs(
+                self.start_date,
+                self.dh.this_month_end,
+                self.ocp_provider_uuid,
+                test_mapping,
+                {"cluster_id": "test", "cluster_alias": "test"},
+            )
+            mock_trino_exec.assert_not_called()
+
+    @patch("masu.database.ocp_report_db_accessor.trino_table_exists")
+    def test_populate_inference_token_ui_summary_no_table(self, mock_trino_table_exists):
+        """Test that inference token UI summary is skipped when table does not exist."""
+        mock_trino_table_exists.return_value = False
+        with self.accessor as acc:
+            acc._populate_inference_token_ui_summary_table(self.sql_params)
+        mock_trino_table_exists.assert_called_with(
+            self.schema, "openshift_inference_token_usage_line_items_daily"
+        )
+
+    @patch("masu.database.ocp_report_db_accessor.get_cluster_id_from_provider", return_value=None)
+    @patch("masu.database.ocp_report_db_accessor.trino_table_exists", return_value=True)
+    @patch(
+        "masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_raw_sql_query",
+        return_value=[[True]],
+    )
+    @patch("masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_multipart_sql_query")
+    def test_populate_inference_token_ui_summary_no_cluster_id(
+        self, mock_trino_exec, mock_trino_raw, mock_trino_exists, mock_cluster_id
+    ):
+        """Test that inference token UI summary is skipped when cluster_id is None."""
+        with self.accessor as acc:
+            acc._populate_inference_token_ui_summary_table(self.sql_params)
+            mock_trino_exec.assert_not_called()
+
+    @patch("masu.database.ocp_report_db_accessor.get_cluster_id_from_provider", return_value="OCP-on-Prem")
+    @patch("masu.database.ocp_report_db_accessor.get_cluster_alias_from_cluster_id", return_value="Test Cluster")
+    @patch("masu.database.ocp_report_db_accessor.trino_table_exists", return_value=True)
+    @patch(
+        "masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_raw_sql_query",
+        return_value=[[True]],
+    )
+    @patch("masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_multipart_sql_query")
+    def test_populate_inference_token_ui_summary_executes_sql(
+        self, mock_trino_exec, mock_trino_raw, mock_trino_exists, mock_alias, mock_cluster_id
+    ):
+        """Test that inference token UI summary SQL is executed when all requirements are met."""
+        with self.accessor as acc:
+            acc._populate_inference_token_ui_summary_table(self.sql_params)
+            mock_trino_exec.assert_called_once()
+
+    @patch("masu.database.ocp_report_db_accessor.trino_table_exists", return_value=True)
+    @patch(
+        "masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_raw_sql_query",
+        return_value=[[False]],
+    )
+    @patch("masu.database.ocp_report_db_accessor.OCPReportDBAccessor._execute_trino_multipart_sql_query")
+    def test_populate_inference_token_ui_summary_source_not_in_table(
+        self, mock_trino_exec, mock_trino_raw, mock_trino_exists
+    ):
+        """Test that inference token UI summary is skipped when source is not in partition."""
+        with self.accessor as acc:
+            acc._populate_inference_token_ui_summary_table(self.sql_params)
+            mock_trino_exec.assert_not_called()
