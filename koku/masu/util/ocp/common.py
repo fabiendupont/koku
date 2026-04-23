@@ -297,6 +297,9 @@ INFERENCE_TOKEN_USAGE_COLUMNS = {
     "inference_service",
     "organization",
     "sla_compliance",
+    "sla_good",
+    "sla_degraded",
+    "sla_breached",
     "input_tokens",
     "output_tokens",
 }

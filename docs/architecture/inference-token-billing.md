@@ -377,60 +377,81 @@ for details.
 
 ---
 
-## SLA-Based Credits
+## SLA-Based Credits (Tiered Billing)
 
 ### Overview
 
-When inference latency degrades below the agreed SLA
-threshold, token costs are automatically discounted
-proportionally to the fraction of requests that missed
-the target. This creates a direct financial incentive
-for platform operators to maintain inference quality.
+When inference latency degrades, token costs are
+automatically discounted using three TTFT (time-to-first-token)
+latency buckets. Each bucket carries a configurable billing
+fraction, giving operators fine-grained control over SLA
+credits. This creates a direct financial incentive for
+platform operators to maintain inference quality.
 
-### Data Source
+### Three-Bucket Model
 
-The `sla_compliance` field (float, 0.0 to 1.0) is
-collected by the koku-metrics-operator using the vLLM
-`vllm:time_to_first_token_seconds_bucket` histogram.
-The operator computes:
+The koku-metrics-operator classifies each request into
+one of three latency tiers using the vLLM
+`vllm:time_to_first_token_seconds_bucket` histogram:
 
-```
-sla_compliance = histogram_fraction(0, 0.5,
-    rate(vllm:time_to_first_token_seconds_bucket[1h]))
-```
+| Bucket | TTFT Range | Billing Fraction | Meaning |
+|--------|-----------|-------------------|---------|
+| `sla_good` | < 500 ms | 1.0 (full price) | Requests met SLA |
+| `sla_degraded` | 500 ms - 2 s | 0.5 (50% discount) | Requests were slow |
+| `sla_breached` | >= 2 s | 0.0 (free) | Requests violated SLA |
 
-This gives the fraction of requests where
-time-to-first-token (TTFT) was under 500 ms.
+The three fractions always sum to 1.0 for a given
+collection interval. The `sla_compliance` field is
+retained for backward compatibility (it equals
+`sla_good`).
 
 ### Cost Formula
 
-The cost calculation becomes:
-
 ```
-cost = tokens x rate x sla_compliance
+cost = tokens x rate x (sla_good x 1.0 + sla_degraded x 0.5 + sla_breached x 0.0)
 ```
 
-| sla_compliance | Meaning | Effect |
-|----------------|---------|--------|
-| 1.0 | All requests met SLA | Full price |
-| 0.8 | 80% met SLA | 80% of full price (20% credit) |
-| 0.5 | 50% met SLA | 50% of full price (50% credit) |
-| 0.0 | No requests met SLA | Free (100% credit) |
-| NULL | No SLA data available | Full price (COALESCE to 1.0) |
+### Example
+
+A namespace had 70% good, 20% degraded, and 10% breached
+requests in a day:
+
+```
+billing_fraction = 0.70 x 1.0 + 0.20 x 0.5 + 0.10 x 0.0
+                 = 0.70 + 0.10 + 0.00
+                 = 0.80  (80% of full price)
+```
+
+With 1M tokens at $0.01/1K tokens:
+
+```
+cost = 1,000,000 x $0.00001 x 0.80 = $8.00
+```
+
+Compare to full price: $10.00. The 20% degraded and
+10% breached requests earned a $2.00 credit.
+
+### Backward Compatibility
+
+| Scenario | sla_good | sla_degraded | sla_breached | Effect |
+|----------|----------|--------------|--------------|--------|
+| All buckets present | 0.70 | 0.20 | 0.10 | Tiered pricing |
+| Only sla_compliance (legacy) | NULL | NULL | NULL | Full price (COALESCE defaults) |
+| No SLA data at all | NULL | NULL | NULL | Full price |
+
+When bucket fields are NULL, the SQL defaults produce:
+`COALESCE(NULL, 1.0) x 1.0 + COALESCE(NULL, 0.0) x 0.5 + COALESCE(NULL, 0.0) x 0.0 = 1.0`
+(full price), preserving backward compatibility.
 
 ### Implementation Notes
 
-- **Approach A (histogram-based):** This is an approximate
-  method that requires no trace infrastructure. It uses
-  Prometheus histogram buckets already exposed by vLLM.
-- **Aggregation:** `sla_compliance` is averaged (not summed)
-  when rolling up across time periods or dimensions, since
-  it is a ratio.
-- **SQL:** The cost model SQL multiplies the token cost by
-  `COALESCE(tok.sla_compliance, 1.0)`, preserving backward
-  compatibility when sla_compliance data is not available.
-- **API:** Exposed as an `Avg` annotation in the report API,
-  orderable via `order_by[sla_compliance]`.
+- **Aggregation:** All three bucket fields are averaged
+  (not summed) when rolling up across time periods or
+  dimensions, since they are ratios.
+- **SQL:** The cost model SQL uses the tiered formula
+  `(COALESCE(tok.sla_good, 1.0) * 1.0 + COALESCE(tok.sla_degraded, 0.0) * 0.5 + COALESCE(tok.sla_breached, 0.0) * 0.0)`.
+- **API:** All three fields are exposed as `Avg` annotations
+  in the report API alongside `sla_compliance`.
 
 ---
 

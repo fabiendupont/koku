@@ -76,6 +76,9 @@ class OCPReportParquetProcessor(ReportParquetProcessorBase):
             "input_tokens",
             "output_tokens",
             "sla_compliance",
+            "sla_good",
+            "sla_degraded",
+            "sla_breached",
             "reportnumhours",  # this is a calculated column and not part of the report
         ]
         date_columns = ["report_period_start", "report_period_end", "interval_start", "interval_end"]

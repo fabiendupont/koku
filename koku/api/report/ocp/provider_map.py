@@ -1257,6 +1257,15 @@ class OCPProviderMap(ProviderMap):
                             "sla_compliance": Avg(
                                 Coalesce(F("sla_compliance"), Value(1, output_field=DecimalField()))
                             ),
+                            "sla_good": Avg(
+                                Coalesce(F("sla_good"), Value(1, output_field=DecimalField()))
+                            ),
+                            "sla_degraded": Avg(
+                                Coalesce(F("sla_degraded"), Value(0, output_field=DecimalField()))
+                            ),
+                            "sla_breached": Avg(
+                                Coalesce(F("sla_breached"), Value(0, output_field=DecimalField()))
+                            ),
                         },
                         "delta_key": {},
                         "filter": [],

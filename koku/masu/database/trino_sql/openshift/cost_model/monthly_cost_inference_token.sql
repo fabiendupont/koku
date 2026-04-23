@@ -39,24 +39,24 @@ SELECT
     ) as json) as all_labels,
     CAST(tok.source AS uuid) as source_uuid,
     {{rate_type}} AS cost_model_rate_type,
-    -- Inference token cost calculation:
-    -- cost = (input_tokens + output_tokens) * rate * sla_compliance
-    -- When sla_compliance = 1.0 (all requests met SLA), full price.
-    -- When sla_compliance = 0.8 (80% met SLA), 80% of full price (20% discount).
+    -- Tiered SLA cost calculation:
+    -- cost = total_tokens * rate * (sla_good * 1.0 + sla_degraded * 0.5 + sla_breached * 0.0)
+    -- The discount rates (1.0, 0.5, 0.0) represent the billing fraction per tier.
+    -- Operators configure the tiers in the cost model rate table.
     {%- if rate is defined %}
-    (tok.input_tokens + tok.output_tokens) * CAST({{rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0),
+    (tok.input_tokens + tok.output_tokens) * CAST({{rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * (COALESCE(tok.sla_good, 1.0) * 1.0 + COALESCE(tok.sla_degraded, 0.0) * 0.5 + COALESCE(tok.sla_breached, 0.0) * 0.0),
     {%- elif value_rates is defined %}
     CASE
         {%- for value, value_rate in value_rates.items() %}
         WHEN tok.model_name = '{{value | sqlsafe}}'
-        THEN (tok.input_tokens + tok.output_tokens) * CAST({{value_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0)
+        THEN (tok.input_tokens + tok.output_tokens) * CAST({{value_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * (COALESCE(tok.sla_good, 1.0) * 1.0 + COALESCE(tok.sla_degraded, 0.0) * 0.5 + COALESCE(tok.sla_breached, 0.0) * 0.0)
         {%- endfor %}
         {%- if default_rate is defined %}
-        ELSE (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0)
+        ELSE (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * (COALESCE(tok.sla_good, 1.0) * 1.0 + COALESCE(tok.sla_degraded, 0.0) * 0.5 + COALESCE(tok.sla_breached, 0.0) * 0.0)
         {%- endif %}
     END,
     {%- elif default_rate is defined %}
-    (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0),
+    (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * (COALESCE(tok.sla_good, 1.0) * 1.0 + COALESCE(tok.sla_degraded, 0.0) * 0.5 + COALESCE(tok.sla_breached, 0.0) * 0.0),
     {%- else %}
     0,
     {%- endif %}
