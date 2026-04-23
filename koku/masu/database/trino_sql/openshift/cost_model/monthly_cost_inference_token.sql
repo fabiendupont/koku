@@ -39,24 +39,26 @@ SELECT
     ) as json) as all_labels,
     CAST(tok.source AS uuid) as source_uuid,
     {{rate_type}} AS cost_model_rate_type,
-    -- Inference token cost calculation:
-    -- cost = (input_tokens + output_tokens) * rate * sla_compliance
-    -- When sla_compliance = 1.0 (all requests met SLA), full price.
-    -- When sla_compliance = 0.8 (80% met SLA), 80% of full price (20% discount).
+    -- Tiered SLA cost calculation:
+    -- cost = total_tokens * rate
+    -- SLA discounts are applied via negative markup on the cost model.
+    -- sla_good, sla_degraded, sla_breached are reporting fields only.
+    -- The discount rates (1.0, 0.5, 0.0) represent the billing fraction per tier.
+    -- Operators configure the tiers in the cost model rate table.
     {%- if rate is defined %}
-    (tok.input_tokens + tok.output_tokens) * CAST({{rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0),
+    (tok.input_tokens + tok.output_tokens) * CAST({{rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)),
     {%- elif value_rates is defined %}
     CASE
         {%- for value, value_rate in value_rates.items() %}
         WHEN tok.model_name = '{{value | sqlsafe}}'
-        THEN (tok.input_tokens + tok.output_tokens) * CAST({{value_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0)
+        THEN (tok.input_tokens + tok.output_tokens) * CAST({{value_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9))
         {%- endfor %}
         {%- if default_rate is defined %}
-        ELSE (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0)
+        ELSE (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9))
         {%- endif %}
     END,
     {%- elif default_rate is defined %}
-    (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0),
+    (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)),
     {%- else %}
     0,
     {%- endif %}
@@ -70,7 +72,7 @@ WHERE date(tok.interval_start) >= DATE({{start_date}})
   AND tok.source = {{source_uuid}}
   AND tok.year = {{year}}
   AND tok.month = {{month}}
-  AND tok.model_name LIKE '{{tag_key | sqlsafe}}%'
+  AND tok.model_name = '{{tag_key | sqlsafe}}'
   {%- if value_rates is defined %}
   AND (
       {%- for value, value_rate in value_rates.items() %}
