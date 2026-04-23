@@ -480,7 +480,7 @@ class OCPInferenceTokenFilterSerializer(BaseFilterSerializer):
 class OCPInferenceTokenOrderBySerializer(OrderSerializer):
     """Serializer for handling inference token query parameter order_by."""
 
-    _opfields = ("date", "model_name", "inference_service", "organization", "input_tokens", "output_tokens", "total_tokens", "cost")
+    _opfields = ("date", "model_name", "inference_service", "organization", "input_tokens", "output_tokens", "total_tokens", "sla_compliance", "cost")
     _op_mapping = {
         "cost": "cost_total",
     }
@@ -491,6 +491,7 @@ class OCPInferenceTokenOrderBySerializer(OrderSerializer):
     input_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
     output_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
     total_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    sla_compliance = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
     cost_total = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
 
 
@@ -503,6 +504,7 @@ class OCPInferenceTokenQueryParamSerializer(OCPQueryParamSerializer):
         "input_tokens",
         "output_tokens",
         "total_tokens",
+        "sla_compliance",
     )
 
     GROUP_BY_SERIALIZER = OCPInferenceTokenGroupBySerializer

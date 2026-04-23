@@ -6,6 +6,7 @@
 from functools import cached_property
 
 from django.contrib.postgres.aggregates import ArrayAgg
+from django.db.models import Avg
 from django.db.models import Case
 from django.db.models import CharField
 from django.db.models import Count
@@ -1252,6 +1253,9 @@ class OCPProviderMap(ProviderMap):
                             ),
                             "total_tokens": Sum(
                                 Coalesce(F("total_tokens"), Value(0, output_field=DecimalField()))
+                            ),
+                            "sla_compliance": Avg(
+                                Coalesce(F("sla_compliance"), Value(1, output_field=DecimalField()))
                             ),
                         },
                         "delta_key": {},

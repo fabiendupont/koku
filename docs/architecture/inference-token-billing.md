@@ -377,6 +377,63 @@ for details.
 
 ---
 
+## SLA-Based Credits
+
+### Overview
+
+When inference latency degrades below the agreed SLA
+threshold, token costs are automatically discounted
+proportionally to the fraction of requests that missed
+the target. This creates a direct financial incentive
+for platform operators to maintain inference quality.
+
+### Data Source
+
+The `sla_compliance` field (float, 0.0 to 1.0) is
+collected by the koku-metrics-operator using the vLLM
+`vllm:time_to_first_token_seconds_bucket` histogram.
+The operator computes:
+
+```
+sla_compliance = histogram_fraction(0, 0.5,
+    rate(vllm:time_to_first_token_seconds_bucket[1h]))
+```
+
+This gives the fraction of requests where
+time-to-first-token (TTFT) was under 500 ms.
+
+### Cost Formula
+
+The cost calculation becomes:
+
+```
+cost = tokens x rate x sla_compliance
+```
+
+| sla_compliance | Meaning | Effect |
+|----------------|---------|--------|
+| 1.0 | All requests met SLA | Full price |
+| 0.8 | 80% met SLA | 80% of full price (20% credit) |
+| 0.5 | 50% met SLA | 50% of full price (50% credit) |
+| 0.0 | No requests met SLA | Free (100% credit) |
+| NULL | No SLA data available | Full price (COALESCE to 1.0) |
+
+### Implementation Notes
+
+- **Approach A (histogram-based):** This is an approximate
+  method that requires no trace infrastructure. It uses
+  Prometheus histogram buckets already exposed by vLLM.
+- **Aggregation:** `sla_compliance` is averaged (not summed)
+  when rolling up across time periods or dimensions, since
+  it is a ratio.
+- **SQL:** The cost model SQL multiplies the token cost by
+  `COALESCE(tok.sla_compliance, 1.0)`, preserving backward
+  compatibility when sla_compliance data is not available.
+- **API:** Exposed as an `Avg` annotation in the report API,
+  orderable via `order_by[sla_compliance]`.
+
+---
+
 ## On-Premise Support
 
 Koku supports on-premise deployment (`ONPREM=True`). For

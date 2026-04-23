@@ -40,22 +40,23 @@ SELECT
     CAST(tok.source AS uuid) as source_uuid,
     {{rate_type}} AS cost_model_rate_type,
     -- Inference token cost calculation:
-    -- cost = input_tokens * input_rate + output_tokens * output_rate
-    -- For simplicity, a single rate is applied per-token (input + output).
+    -- cost = (input_tokens + output_tokens) * rate * sla_compliance
+    -- When sla_compliance = 1.0 (all requests met SLA), full price.
+    -- When sla_compliance = 0.8 (80% met SLA), 80% of full price (20% discount).
     {%- if rate is defined %}
-    (tok.input_tokens + tok.output_tokens) * CAST({{rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)),
+    (tok.input_tokens + tok.output_tokens) * CAST({{rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0),
     {%- elif value_rates is defined %}
     CASE
         {%- for value, value_rate in value_rates.items() %}
         WHEN tok.model_name = '{{value | sqlsafe}}'
-        THEN (tok.input_tokens + tok.output_tokens) * CAST({{value_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9))
+        THEN (tok.input_tokens + tok.output_tokens) * CAST({{value_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0)
         {%- endfor %}
         {%- if default_rate is defined %}
-        ELSE (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9))
+        ELSE (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0)
         {%- endif %}
     END,
     {%- elif default_rate is defined %}
-    (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)),
+    (tok.input_tokens + tok.output_tokens) * CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)) * COALESCE(tok.sla_compliance, 1.0),
     {%- else %}
     0,
     {%- endif %}
