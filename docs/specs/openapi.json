@@ -11398,6 +11398,10 @@
                                                     "model_name": "llama-3-8b",
                                                     "inference_service": "llama-3-8b-service",
                                                     "organization": "acme-corp",
+                                                    "sla_compliance": {
+                                                        "value": 0.95,
+                                                        "units": "ratio"
+                                                    },
                                                     "input_tokens": {
                                                         "value": 1500000.0,
                                                         "units": "tokens"

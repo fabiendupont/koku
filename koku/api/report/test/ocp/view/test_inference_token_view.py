@@ -191,6 +191,15 @@ class OCPInferenceTokenViewTest(IamTestCase):
         self.assertIn("data", response.data)
 
     @patch("api.report.ocp.view.is_feature_flag_enabled_by_schema", return_value=True)
+    def test_order_by_sla_compliance(self, mock_unleash):
+        """Test that ordering by sla_compliance succeeds."""
+        url = reverse("reports-openshift-inference-tokens")
+        query_params = {"order_by[sla_compliance]": "asc"}
+        url = url + "?" + urlencode(query_params, doseq=True)
+        response = self.client.get(url, **self.headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    @patch("api.report.ocp.view.is_feature_flag_enabled_by_schema", return_value=True)
     def test_accessible_when_unleash_flag_enabled(self, mock_unleash):
         """Test that inference token endpoint is accessible when Unleash flag is enabled."""
         url = reverse("reports-openshift-inference-tokens")

@@ -296,6 +296,7 @@ INFERENCE_TOKEN_USAGE_COLUMNS = {
     "model_name",
     "inference_service",
     "organization",
+    "sla_compliance",
     "input_tokens",
     "output_tokens",
 }

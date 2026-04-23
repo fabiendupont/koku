@@ -37,8 +37,9 @@ SELECT
     tok.source::uuid as source_uuid,
     {{rate_type}} AS cost_model_rate_type,
     -- Inference token cost calculation:
-    -- cost = input_tokens * input_rate + output_tokens * output_rate
-    -- For simplicity, a single rate is applied per-token (input + output).
+    -- cost = (input_tokens + output_tokens) * rate
+    -- SLA discounts are applied via negative markup on the cost model,
+    -- not as automatic multipliers. sla_compliance is a reporting field.
     {%- if rate is defined %}
     (tok.input_tokens + tok.output_tokens) * CAST({{rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)),
     {%- elif value_rates is defined %}
@@ -66,7 +67,7 @@ WHERE tok.usage_start >= DATE({{start_date}})
   AND tok.source = {{source_uuid}}
   AND tok.year = {{year}}
   AND lpad(tok.month, 2, '0') = {{month}}
-  AND tok.model_name LIKE '{{tag_key | sqlsafe}}%'
+  AND tok.model_name = '{{tag_key | sqlsafe}}'
   {%- if value_rates is defined %}
   AND (
       {%- for value, value_rate in value_rates.items() %}

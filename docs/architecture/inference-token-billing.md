@@ -377,6 +377,65 @@ for details.
 
 ---
 
+## SLA-Based Credits
+
+### Overview
+
+When inference latency degrades below the agreed SLA
+threshold, token costs are automatically discounted
+proportionally to the fraction of requests that missed
+the target. This creates a direct financial incentive
+for platform operators to maintain inference quality.
+
+### Data Source
+
+The `sla_compliance` field (float, 0.0 to 1.0) is
+collected by the koku-metrics-operator using the vLLM
+`vllm:time_to_first_token_seconds_bucket` histogram.
+The operator computes:
+
+```
+sla_compliance = histogram_fraction(0, 0.5,
+    rate(vllm:time_to_first_token_seconds_bucket[1h]))
+```
+
+This gives the fraction of requests where
+time-to-first-token (TTFT) was under 500 ms.
+
+### How Discounts Are Applied
+
+SLA discounts use Koku's existing **negative markup**
+mechanism, not automatic SQL multipliers. The operator
+reviews the SLA compliance data in reports and configures
+the cost model accordingly:
+
+| sla_compliance | Operator sees | Operator action |
+|----------------|--------------|-----------------|
+| 1.0 | All requests met SLA | No markup adjustment |
+| 0.8 | 80% met SLA | Set markup = -20% on token cost model |
+| 0.5 | 50% met SLA | Set markup = -50% |
+
+This approach:
+- Reuses the existing markup mechanism (no new code)
+- Gives operators control over discount amounts
+- Avoids hardcoded discount factors in SQL
+- Works consistently with cache-aware discounts
+
+### Implementation Notes
+
+- **Approach A (histogram-based):** Approximate method
+  using Prometheus histogram buckets exposed by vLLM.
+  No trace infrastructure needed.
+- **Aggregation:** `sla_compliance` is averaged (not summed)
+  when rolling up across time periods or dimensions.
+- **Reporting only:** `sla_compliance` is visible in the API
+  for operators to make discount decisions. It does not
+  automatically adjust cost.
+- **API:** Exposed as an `Avg` annotation in the report API,
+  orderable via `order_by[sla_compliance]`.
+
+---
+
 ## On-Premise Support
 
 Koku supports on-premise deployment (`ONPREM=True`). For
