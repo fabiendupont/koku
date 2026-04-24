@@ -5,8 +5,8 @@ Koku, enabling operators to bill for agentic AI workloads
 where a single user request triggers multiple LLM calls,
 tool executions, and retrieval operations.
 
-**Status:** Design only — requires trace-level integration
-that is architecturally different from metric-based billing.
+**Status:** Prototype implementation — backend API and data model
+are implemented; trace collection worker is not yet built.
 
 **Related:** COST-7165 (Implement per-AI agent),
 COST-7164 (Cost of MaaS — prerequisite)
@@ -214,6 +214,30 @@ Follow the same patterns as inference token billing.
 Use `gen_ai.usage.cache_read.input_tokens` to apply
 discounts for cached inference. Cached tokens use less
 compute and should cost less.
+
+---
+
+## What Is Implemented
+
+- **Data model:** `OCPAgentCostSummaryP` partitioned summary table
+  with agent_name, agent_id, model_name, token counts (input/output/cache),
+  LLM/tool call counts, invocation count, avg duration, and cost fields.
+- **Migration:** `0348_ocpagentcostsummaryp.py`
+- **API endpoint:** `GET /reports/openshift/agents/`
+  - group_by: cluster, project, agent_name, model_name
+  - filter: cluster, project, agent_name, model_name
+  - order_by: date, agent_name, model_name, input_tokens, output_tokens,
+    invocation_count, cost
+- **Feature flag:** `cost-management.backend.ocp_agent_cost_model`
+  (enabled by default on-prem via MockUnleashClient)
+- **UI summary SQL:** PostgreSQL, Trino, and self-hosted variants
+- **Tests:** Endpoint accessibility, group_by, filter, order_by, Unleash gate
+
+### Not yet implemented
+
+- Trace collection worker (Phase 2) — queries Tempo for `invoke_agent` traces
+- Cost model rate integration for agents
+- Cache-aware billing discounts (Phase 4)
 
 ---
 

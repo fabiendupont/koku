@@ -50,6 +50,7 @@ class OCPReportTypes(Enum):
     NAMESPACE_LABELS = 4
     VM_USAGE = 5
     GPU_USAGE = 6
+    AGENT_BILLING = 7
 
 
 STORAGE_COLUMNS = {
@@ -284,6 +285,37 @@ GPU_AGG = {
     "mig_strategy": ["max"],
 }
 
+AGENT_BILLING_COLUMNS = {
+    "report_period_start",
+    "report_period_end",
+    "interval_start",
+    "interval_end",
+    "node",
+    "namespace",
+    "agent_name",
+    "agent_id",
+    "model_name",
+    "input_tokens",
+    "output_tokens",
+    "cache_read_tokens",
+    "llm_call_count",
+    "tool_call_count",
+    "duration_seconds",
+}
+
+AGENT_BILLING_GROUP_BY = ["namespace", "node", "agent_name", "agent_id", "model_name"]
+
+AGENT_BILLING_AGG = {
+    "report_period_start": ["max"],
+    "report_period_end": ["max"],
+    "input_tokens": ["sum"],
+    "output_tokens": ["sum"],
+    "cache_read_tokens": ["sum"],
+    "llm_call_count": ["sum"],
+    "tool_call_count": ["sum"],
+    "duration_seconds": ["mean"],
+}
+
 # MIG (Multi-Instance GPU) configuration
 # Max slices by GPU model - used to determine parent gpu max slices
 GPU_MAX_SLICES_BY_MODEL = {
@@ -345,6 +377,13 @@ OCP_REPORT_TYPES = {
         "group_by": GPU_GROUP_BY,
         "agg": GPU_AGG,
         "new_required_columns": GPU_USAGE_NEWV_COLUMNS_AND_TYPES,
+    },
+    "agent_billing": {
+        "columns": AGENT_BILLING_COLUMNS,
+        "enum": OCPReportTypes.AGENT_BILLING,
+        "group_by": AGENT_BILLING_GROUP_BY,
+        "agg": AGENT_BILLING_AGG,
+        "new_required_columns": {},
     },
 }
 

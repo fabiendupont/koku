@@ -451,6 +451,81 @@ class OCPGpuQueryParamSerializer(OCPQueryParamSerializer):
         super().__init__(*args, **kwargs)
 
 
+class OCPAgentGroupBySerializer(GroupSerializer):
+    """Serializer for handling agent query parameter group_by."""
+
+    _opfields = ("cluster", "project", "agent_name", "model_name")
+
+    cluster = StringOrListField(child=serializers.CharField(), required=False)
+    project = StringOrListField(child=serializers.CharField(), required=False)
+    agent_name = StringOrListField(child=serializers.CharField(), required=False)
+    model_name = StringOrListField(child=serializers.CharField(), required=False)
+
+
+class OCPAgentFilterSerializer(BaseFilterSerializer):
+    """Serializer for handling agent query parameter filter."""
+
+    _opfields = ("cluster", "project", "agent_name", "model_name")
+
+    cluster = StringOrListField(child=serializers.CharField(), required=False)
+    project = StringOrListField(child=serializers.CharField(), required=False)
+    agent_name = StringOrListField(child=serializers.CharField(), required=False)
+    model_name = StringOrListField(child=serializers.CharField(), required=False)
+
+
+class OCPAgentOrderBySerializer(OrderSerializer):
+    """Serializer for handling agent query parameter order_by."""
+
+    _opfields = (
+        "date",
+        "agent_name",
+        "model_name",
+        "input_tokens",
+        "output_tokens",
+        "invocation_count",
+        "cost",
+        "cost_total",
+    )
+    _op_mapping = {
+        "cost": "cost_total",
+    }
+
+    date = serializers.DateField(required=False)
+    agent_name = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    model_name = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    input_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    output_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    invocation_count = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    cost_total = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+
+
+class OCPAgentQueryParamSerializer(OCPQueryParamSerializer):
+    """Serializer for handling agent query parameters."""
+
+    order_by_allowlist = (
+        "cost_total",
+        "input_tokens",
+        "output_tokens",
+        "invocation_count",
+        "agent_name",
+        "model_name",
+    )
+
+    GROUP_BY_SERIALIZER = OCPAgentGroupBySerializer
+    FILTER_SERIALIZER = OCPAgentFilterSerializer
+    ORDER_BY_SERIALIZER = OCPAgentOrderBySerializer
+
+    def __init__(self, *args, **kwargs):
+        """Strip tag keys from filter/exclude/group_by so nested serializers are created with cleaned data."""
+        if "data" in kwargs and kwargs["data"]:
+            data = dict(kwargs["data"])
+            for key in ("filter", "exclude", "group_by"):
+                if key in data and data[key]:
+                    data[key] = _strip_tag_keys_from_param_dict(data[key])
+            kwargs = {**kwargs, "data": data}
+        super().__init__(*args, **kwargs)
+
+
 class OCPMigProfilesFilterSerializer(BaseFilterSerializer):
     """Serializer for handling MIG profiles filter parameters.
 

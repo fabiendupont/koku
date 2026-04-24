@@ -7,6 +7,7 @@ import copy
 
 from api.models import Provider
 from masu.processor import is_feature_flag_enabled_by_schema
+from masu.processor import OCP_AGENT_COST_MODEL_UNLEASH_FLAG
 from masu.processor import OCP_GPU_COST_MODEL_UNLEASH_FLAG
 
 """Model for our cost model metric map."""
@@ -31,6 +32,7 @@ OCP_VM_CORE_MONTH = "vm_core_cost_per_month"
 OCP_VM_CORE_HOUR = "vm_core_cost_per_hour"
 OCP_PROJECT_MONTH = "project_per_month"
 OCP_GPU_MONTH = "gpu_cost_per_month"
+OCP_AGENT_COST = "agent_cost_per_token"
 
 CPU = "cpu"
 MEM = "memory"
@@ -63,6 +65,7 @@ METRIC_CHOICES = (
     OCP_VM_CORE_MONTH,
     OCP_VM_CORE_HOUR,
     OCP_GPU_MONTH,
+    OCP_AGENT_COST,
 )
 
 COST_TYPE_CHOICES = (
@@ -285,12 +288,28 @@ UNLEASH_METRICS_GPU = {
 }
 
 
+UNLEASH_METRICS_AGENT = {
+    "agent_cost_per_token": {
+        "source_type": "OCP",
+        "metric": "agent_cost_per_token",
+        "label_metric": "Agent",
+        "label_measurement": "Usage",
+        "label_measurement_unit": "tokens",
+        "default_cost_type": "Supplementary",
+    },
+}
+
+
 def get_cost_model_metrics_map(schema=None):
     map_copy = copy.deepcopy(COST_MODEL_METRIC_MAP)
 
     # Check GPU unleash flag
     if is_feature_flag_enabled_by_schema(schema, OCP_GPU_COST_MODEL_UNLEASH_FLAG, dev_fallback=True):
         map_copy |= copy.deepcopy(UNLEASH_METRICS_GPU)
+
+    # Check Agent unleash flag
+    if is_feature_flag_enabled_by_schema(schema, OCP_AGENT_COST_MODEL_UNLEASH_FLAG, dev_fallback=True):
+        map_copy |= copy.deepcopy(UNLEASH_METRICS_AGENT)
 
     return map_copy
 

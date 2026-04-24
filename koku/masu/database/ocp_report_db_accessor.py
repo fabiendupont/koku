@@ -33,6 +33,7 @@ from masu.database import OCP_REPORT_TABLE_MAP
 from masu.database.cost_model_db_accessor import CostModelDBAccessor
 from masu.database.report_db_accessor_base import ReportDBAccessorBase
 from masu.processor import is_feature_flag_enabled_by_schema
+from masu.processor import OCP_AGENT_COST_MODEL_UNLEASH_FLAG
 from masu.processor import OCP_GPU_COST_MODEL_UNLEASH_FLAG
 from masu.util.common import filter_dictionary
 from masu.util.common import SummaryRangeConfig
@@ -115,6 +116,7 @@ class OCPReportDBAccessor(SQLScriptAtomicExecutorMixin, ReportDBAccessorBase):
         sql_params["month"] = start_date.strftime("%m")
 
         self._populate_gpu_ui_summary_table_with_usage_only(sql_params)
+        self._populate_agent_cost_ui_summary_table(sql_params)
         if summary_range.summarize_previous_month and not summary_range.is_current_month:
             # Don't resummarize virtualization UI table if we are summarizing previous month
             return
@@ -189,6 +191,76 @@ class OCPReportDBAccessor(SQLScriptAtomicExecutorMixin, ReportDBAccessorBase):
         else:
             # SaaS: execute via Trino
             self._execute_trino_multipart_sql_query(populate_gpu_usage_info, bind_params=sql_params)
+
+    def _populate_agent_cost_ui_summary_table(self, params):
+        """
+        Populates the agent cost UI summary table with usage data from
+        openshift_agent_billing_line_items when agent billing data exists.
+        """
+        sql_params = copy.deepcopy(params)
+        source_uuid = sql_params.get("source_uuid")
+
+        if not is_feature_flag_enabled_by_schema(self.schema, OCP_AGENT_COST_MODEL_UNLEASH_FLAG, dev_fallback=True):
+            return
+
+        is_onprem = self.get_sql_folder_name() == "self_hosted_sql"
+
+        if is_onprem:
+            try:
+                from django_tenants.utils import schema_context as sc
+
+                with sc(self.schema):
+                    from django.db import connection
+
+                    with connection.cursor() as cursor:
+                        cursor.execute(
+                            "SELECT EXISTS (SELECT 1 FROM information_schema.tables "
+                            "WHERE table_schema = %s AND table_name = %s)",
+                            [self.schema, "openshift_agent_billing_line_items"],
+                        )
+                        if not cursor.fetchone()[0]:
+                            return
+            except Exception:
+                return
+        else:
+            agent_table = TRINO_LINE_ITEM_TABLE_DAILY_MAP.get("agent_billing")
+            if not agent_table or not trino_table_exists(self.schema, agent_table):
+                return
+            source_sql = get_report_db_accessor().get_check_source_in_partitions_sql(
+                schema_name=self.schema, table_name=agent_table, source_uuid=source_uuid
+            )
+            result = self._execute_trino_raw_sql_query(
+                source_sql,
+                log_ref=f"Checking if source is in {agent_table}",
+            )
+            if not result or not result[0][0]:
+                return
+
+        cluster_id = get_cluster_id_from_provider(sql_params.get("source_uuid"))
+        if not cluster_id:
+            LOG.info(
+                log_json(
+                    msg="No cluster_id found for source, skipping agent cost UI table population.",
+                    context=sql_params,
+                )
+            )
+            return
+
+        sql_params["cluster_id"] = cluster_id
+        sql_params["cluster_alias"] = get_cluster_alias_from_cluster_id(cluster_id)
+        sql_params["source_uuid"] = str(sql_params["source_uuid"])
+        populate_agent_sql = pkgutil.get_data(
+            "masu.database",
+            f"{self.get_sql_folder_name()}/openshift/ui_summary/reporting_ocp_agent_cost_summary_p.sql",
+        )
+        populate_agent_sql = populate_agent_sql.decode("utf-8")
+
+        if is_onprem:
+            self._prepare_and_execute_raw_sql_query(
+                "reporting_ocp_agent_cost_summary_p", populate_agent_sql, sql_params, operation="INSERT"
+            )
+        else:
+            self._execute_trino_multipart_sql_query(populate_agent_sql, bind_params=sql_params)
 
     def _reporting_period_has_gpu_data(self, source_uuid: uuid.UUID, start_date) -> bool:
         """
@@ -1448,8 +1520,10 @@ AND (month = replace(ltrim(replace('{month}', '0', ' ')),' ', '0') OR month = '{
         monthly_params = {"amortized_denominator": DateHelper().days_in_month(start_date), "cost_type": "Tag"}
         vm_table_exists = trino_table_exists(self.schema, "openshift_vm_usage_line_items")
         gpu_table_exists = trino_table_exists(self.schema, "openshift_gpu_usage_line_items_daily")
+        agent_table_exists = trino_table_exists(self.schema, "openshift_agent_billing_line_items")
         requires_vm_table = [metric_constants.OCP_VM_CORE_HOUR, metric_constants.OCP_VM_CORE_MONTH]
         requires_gpu_table = [metric_constants.OCP_GPU_MONTH]
+        requires_agent_table = [metric_constants.OCP_AGENT_COST]
 
         metric_metadata = {
             metric_constants.OCP_VM_HOUR: {
@@ -1481,6 +1555,11 @@ AND (month = replace(ltrim(replace('{month}', '0', ' ')),' ', '0') OR month = '{
                 "file_path": f"{self.get_sql_folder_name()}/openshift/cost_model/monthly_project_tag_based.sql",
                 "metric_params": {**monthly_params, **cluster_params},
             },
+            metric_constants.OCP_AGENT_COST: {
+                "log_msg": "populating agent tag based costs",
+                "file_path": f"{self.get_sql_folder_name()}/openshift/cost_model/monthly_cost_agent.sql",
+                "metric_params": {**monthly_params, **cluster_params},
+            },
         }
 
         param_builder = BaseCostModelParams(
@@ -1497,6 +1576,25 @@ AND (month = replace(ltrim(replace('{month}', '0', ' ')),' ', '0') OR month = '{
 
             if name in requires_gpu_table and not gpu_table_exists:
                 continue
+
+            if name in requires_agent_table and not agent_table_exists:
+                continue
+
+            # Check Unleash flag for Agent cost model
+            if name == metric_constants.OCP_AGENT_COST:
+                if not is_feature_flag_enabled_by_schema(
+                    self.schema, OCP_AGENT_COST_MODEL_UNLEASH_FLAG, dev_fallback=True
+                ):
+                    continue
+                if not cluster_params.get("cluster_id"):
+                    LOG.info(
+                        log_json(
+                            msg="No cluster_id found, skipping Agent tag based cost population.",
+                            schema=self.schema,
+                            provider_uuid=str(provider_uuid),
+                        )
+                    )
+                    continue
 
             # Check Unleash flag for GPU cost model
             if name == metric_constants.OCP_GPU_MONTH:

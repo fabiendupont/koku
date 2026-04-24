@@ -1,0 +1,81 @@
+INSERT INTO {{schema | sqlsafe}}.reporting_ocpusagelineitem_daily_summary (
+    uuid,
+    report_period_id,
+    cluster_id,
+    cluster_alias,
+    data_source,
+    usage_start,
+    usage_end,
+    namespace,
+    node,
+    all_labels,
+    source_uuid,
+    cost_model_rate_type,
+    cost_model_gpu_cost,
+    monthly_cost_type,
+    cost_category_id
+)
+SELECT
+    uuid_generate_v4() as uuid,
+    {{report_period_id}} as report_period_id,
+    {{cluster_id}} as cluster_id,
+    {{cluster_alias}} as cluster_alias,
+    'Agent' as data_source,
+    ab.usage_start,
+    ab.usage_start as usage_end,
+    ab.namespace as namespace,
+    ab.node as node,
+    jsonb_build_object(
+        'agent-name', ab.agent_name,
+        'agent-id', ab.agent_id,
+        'model-name', ab.model_name,
+        'input-tokens', ab.input_tokens::varchar,
+        'output-tokens', ab.output_tokens::varchar,
+        'cache-read-tokens', ab.cache_read_tokens::varchar,
+        'llm-call-count', ab.llm_call_count::varchar,
+        'tool-call-count', ab.tool_call_count::varchar,
+        'duration-seconds', ab.duration_seconds::varchar
+    ) as all_labels,
+    ab.source::uuid as source_uuid,
+    {{rate_type}} AS cost_model_rate_type,
+    -- Agent cost = (input_tokens + output_tokens) * rate / amortized_denominator
+    {%- if rate is defined %}
+    (COALESCE(ab.input_tokens, 0) + COALESCE(ab.output_tokens, 0))
+        * (CAST({{rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9))),
+    {%- elif value_rates is defined %}
+    CASE
+        {%- for value, value_rate in value_rates.items() %}
+        WHEN ab.agent_name = '{{value | sqlsafe}}'
+        THEN (COALESCE(ab.input_tokens, 0) + COALESCE(ab.output_tokens, 0))
+            * (CAST({{value_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)))
+        {%- endfor %}
+        {%- if default_rate is defined %}
+        ELSE (COALESCE(ab.input_tokens, 0) + COALESCE(ab.output_tokens, 0))
+            * (CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9)))
+        {%- endif %}
+    END,
+    {%- elif default_rate is defined %}
+    (COALESCE(ab.input_tokens, 0) + COALESCE(ab.output_tokens, 0))
+        * (CAST({{default_rate}} AS decimal(24,9)) / CAST({{amortized_denominator}} AS decimal(24,9))),
+    {%- else %}
+    0,
+    {%- endif %}
+    'Tag' AS monthly_cost_type,
+    cat_ns.cost_category_id
+FROM {{schema | sqlsafe}}.openshift_agent_billing_line_items AS ab
+LEFT JOIN {{schema | sqlsafe}}.reporting_ocp_cost_category_namespace AS cat_ns
+    ON ab.namespace LIKE cat_ns.namespace
+WHERE ab.usage_start >= DATE({{start_date}})
+  AND ab.usage_start <= DATE({{end_date}})
+  AND ab.source = {{source_uuid}}
+  AND ab.year = {{year}}
+  AND lpad(ab.month, 2, '0') = {{month}}
+  {%- if value_rates is defined %}
+  AND (
+      {%- for value, value_rate in value_rates.items() %}
+      {%- if not loop.first %} OR {%- endif %}
+      ab.agent_name = '{{value | sqlsafe}}'
+      {%- endfor %}
+  )
+  {%- endif %}
+RETURNING 1;
