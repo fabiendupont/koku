@@ -31,6 +31,8 @@ SELECT
         'model-name', tok.model_name,
         'inference-service', tok.inference_service,
         'organization', tok.organization,
+        'operation-name', tok.operation_name,
+        'provider-name', tok.provider_name,
         'input-tokens', tok.input_tokens::varchar,
         'output-tokens', tok.output_tokens::varchar
     ) as all_labels,
@@ -66,7 +68,7 @@ WHERE tok.usage_start >= DATE({{start_date}})
   AND tok.source = {{source_uuid}}
   AND tok.year = {{year}}
   AND lpad(tok.month, 2, '0') = {{month}}
-  AND tok.model_name LIKE '{{tag_key | sqlsafe}}%'
+  AND tok.model_name = '{{tag_key | sqlsafe}}'
   {%- if value_rates is defined %}
   AND (
       {%- for value, value_rate in value_rates.items() %}

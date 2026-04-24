@@ -360,6 +360,18 @@ class OCPPostProcessor:
                 data_frame["organization"].str.replace(r"[^a-zA-Z0-9]+", " ", regex=True).str.strip().str.lower()
             )
 
+        # Normalize operation names (strip special chars, lowercase)
+        if "operation_name" in data_frame.columns:
+            data_frame["operation_name"] = (
+                data_frame["operation_name"].str.replace(r"[^a-zA-Z0-9]+", " ", regex=True).str.strip().str.lower()
+            )
+
+        # Normalize provider names (strip special chars, lowercase)
+        if "provider_name" in data_frame.columns:
+            data_frame["provider_name"] = (
+                data_frame["provider_name"].str.replace(r"[^a-zA-Z0-9]+", " ", regex=True).str.strip().str.lower()
+            )
+
         # Ensure non-negative token counts
         for col in ("input_tokens", "output_tokens"):
             if col in data_frame.columns:

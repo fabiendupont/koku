@@ -15,6 +15,8 @@ INSERT INTO {{schema | sqlsafe}}.reporting_ocp_inference_token_summary_p (
     model_name,
     inference_service,
     organization,
+    operation_name,
+    provider_name,
     input_tokens,
     output_tokens,
     total_tokens,
@@ -30,6 +32,8 @@ SELECT uuid_generate_v4(),
     tok.model_name,
     tok.inference_service,
     tok.organization,
+    tok.operation_name,
+    tok.provider_name,
     sum(tok.input_tokens) as input_tokens,
     sum(tok.output_tokens) as output_tokens,
     sum(tok.input_tokens) + sum(tok.output_tokens) as total_tokens,
@@ -40,5 +44,5 @@ WHERE tok.source = {{source_uuid}}
     AND lpad(tok.month, 2, '0') = {{month}}
     AND tok.usage_start >= date({{start_date}})
     AND tok.usage_start <= date({{end_date}})
-GROUP BY tok.namespace, tok.node, tok.model_name, tok.inference_service, tok.organization, tok.usage_start
+GROUP BY tok.namespace, tok.node, tok.model_name, tok.inference_service, tok.organization, tok.operation_name, tok.provider_name, tok.usage_start
 RETURNING 1;

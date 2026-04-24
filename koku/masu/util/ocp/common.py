@@ -296,11 +296,13 @@ INFERENCE_TOKEN_USAGE_COLUMNS = {
     "model_name",
     "inference_service",
     "organization",
+    "operation_name",
+    "provider_name",
     "input_tokens",
     "output_tokens",
 }
 
-INFERENCE_TOKEN_GROUP_BY = ["namespace", "pod", "model_name", "inference_service", "organization"]
+INFERENCE_TOKEN_GROUP_BY = ["namespace", "pod", "model_name", "inference_service", "organization", "operation_name", "provider_name"]
 
 INFERENCE_TOKEN_AGG = {
     "report_period_start": ["max"],

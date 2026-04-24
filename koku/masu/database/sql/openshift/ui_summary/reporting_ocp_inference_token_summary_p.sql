@@ -15,6 +15,8 @@ INSERT INTO {{schema | sqlsafe}}.reporting_ocp_inference_token_summary_p (
     model_name,
     inference_service,
     organization,
+    operation_name,
+    provider_name,
     input_tokens,
     output_tokens,
     total_tokens,
@@ -32,6 +34,8 @@ INSERT INTO {{schema | sqlsafe}}.reporting_ocp_inference_token_summary_p (
         all_labels->>'model-name' as model_name,
         all_labels->>'inference-service' as inference_service,
         all_labels->>'organization' as organization,
+        all_labels->>'operation-name' as operation_name,
+        all_labels->>'provider-name' as provider_name,
         sum((all_labels->>'input-tokens')::numeric) as input_tokens,
         sum((all_labels->>'output-tokens')::numeric) as output_tokens,
         sum((all_labels->>'input-tokens')::numeric) + sum((all_labels->>'output-tokens')::numeric) as total_tokens,
@@ -50,6 +54,8 @@ INSERT INTO {{schema | sqlsafe}}.reporting_ocp_inference_token_summary_p (
         all_labels->>'model-name',
         all_labels->>'inference-service',
         all_labels->>'organization',
+        all_labels->>'operation-name',
+        all_labels->>'provider-name',
         usage_start,
         source_uuid
 ;

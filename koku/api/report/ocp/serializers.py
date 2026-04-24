@@ -454,7 +454,7 @@ class OCPGpuQueryParamSerializer(OCPQueryParamSerializer):
 class OCPInferenceTokenGroupBySerializer(GroupSerializer):
     """Serializer for handling inference token query parameter group_by."""
 
-    _opfields = ("cluster", "node", "project", "model_name", "inference_service", "organization")
+    _opfields = ("cluster", "node", "project", "model_name", "inference_service", "organization", "operation_name", "provider_name")
 
     cluster = StringOrListField(child=serializers.CharField(), required=False)
     node = StringOrListField(child=serializers.CharField(), required=False)
@@ -462,12 +462,14 @@ class OCPInferenceTokenGroupBySerializer(GroupSerializer):
     model_name = StringOrListField(child=serializers.CharField(), required=False)
     inference_service = StringOrListField(child=serializers.CharField(), required=False)
     organization = StringOrListField(child=serializers.CharField(), required=False)
+    operation_name = StringOrListField(child=serializers.CharField(), required=False)
+    provider_name = StringOrListField(child=serializers.CharField(), required=False)
 
 
 class OCPInferenceTokenFilterSerializer(BaseFilterSerializer):
     """Serializer for handling inference token query parameter filter."""
 
-    _opfields = ("cluster", "node", "project", "model_name", "inference_service", "organization")
+    _opfields = ("cluster", "node", "project", "model_name", "inference_service", "organization", "operation_name", "provider_name")
 
     cluster = StringOrListField(child=serializers.CharField(), required=False)
     node = StringOrListField(child=serializers.CharField(), required=False)
@@ -475,12 +477,14 @@ class OCPInferenceTokenFilterSerializer(BaseFilterSerializer):
     model_name = StringOrListField(child=serializers.CharField(), required=False)
     inference_service = StringOrListField(child=serializers.CharField(), required=False)
     organization = StringOrListField(child=serializers.CharField(), required=False)
+    operation_name = StringOrListField(child=serializers.CharField(), required=False)
+    provider_name = StringOrListField(child=serializers.CharField(), required=False)
 
 
 class OCPInferenceTokenOrderBySerializer(OrderSerializer):
     """Serializer for handling inference token query parameter order_by."""
 
-    _opfields = ("date", "model_name", "inference_service", "organization", "input_tokens", "output_tokens", "total_tokens", "cost")
+    _opfields = ("date", "model_name", "inference_service", "organization", "operation_name", "input_tokens", "output_tokens", "total_tokens", "cost")
     _op_mapping = {
         "cost": "cost_total",
     }
@@ -488,6 +492,7 @@ class OCPInferenceTokenOrderBySerializer(OrderSerializer):
     date = serializers.DateField(required=False)
     model_name = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
     inference_service = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
+    operation_name = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
     input_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
     output_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)
     total_tokens = serializers.ChoiceField(choices=OrderSerializer.ORDER_CHOICES, required=False)

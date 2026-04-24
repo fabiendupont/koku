@@ -2141,6 +2141,42 @@
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    {
+                        "name": "filter[operation_name]",
+                        "in": "query",
+                        "required": false,
+                        "description": "Filter by OTel GenAI operation name (chat, embeddings, text_completion, invoke_agent, execute_tool)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "group_by[operation_name]",
+                        "in": "query",
+                        "required": false,
+                        "description": "Group by OTel GenAI operation name",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "filter[provider_name]",
+                        "in": "query",
+                        "required": false,
+                        "description": "Filter by OTel GenAI provider name (openai, vllm, anthropic, aws.bedrock)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "group_by[provider_name]",
+                        "in": "query",
+                        "required": false,
+                        "description": "Group by OTel GenAI provider name",
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "responses": {
@@ -11398,6 +11434,8 @@
                                                     "model_name": "llama-3-8b",
                                                     "inference_service": "llama-3-8b-service",
                                                     "organization": "acme-corp",
+                                                    "operation_name": "chat",
+                                                    "provider_name": "vllm",
                                                     "input_tokens": {
                                                         "value": 1500000.0,
                                                         "units": "tokens"

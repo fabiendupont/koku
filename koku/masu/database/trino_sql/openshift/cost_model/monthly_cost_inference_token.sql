@@ -28,11 +28,13 @@ SELECT
     tok.node as node,
     tok.model_name as resource_id,
     cast(map(
-        ARRAY['model-name', 'inference-service', 'organization', 'input-tokens', 'output-tokens'],
+        ARRAY['model-name', 'inference-service', 'organization', 'operation-name', 'provider-name', 'input-tokens', 'output-tokens'],
         ARRAY[
             tok.model_name,
             tok.inference_service,
             tok.organization,
+            tok.operation_name,
+            tok.provider_name,
             CAST(tok.input_tokens AS varchar),
             CAST(tok.output_tokens AS varchar)
         ]
@@ -69,7 +71,7 @@ WHERE date(tok.interval_start) >= DATE({{start_date}})
   AND tok.source = {{source_uuid}}
   AND tok.year = {{year}}
   AND tok.month = {{month}}
-  AND tok.model_name LIKE '{{tag_key | sqlsafe}}%'
+  AND tok.model_name = '{{tag_key | sqlsafe}}'
   {%- if value_rates is defined %}
   AND (
       {%- for value, value_rate in value_rates.items() %}
