@@ -2077,6 +2077,82 @@
                 ]
             }
         },
+        "/reports/openshift/agents/": {
+            "get": {
+                "tags": [
+                    "OpenShift Reports"
+                ],
+                "summary": "Query to obtain OpenShift agent cost information",
+                "operationId": "getOpenShiftAgentReports",
+                "description": "Returns per-agent cost data aggregated from trace-based billing records. Supports group_by agent_name, model_name, cluster, and project.",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/QueryFilter"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryGroupBy"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryOrderBy"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryOffset"
+                    },
+                    {
+                        "$ref": "#/components/parameters/ReportQueryLimit"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryStartDate"
+                    },
+                    {
+                        "$ref": "#/components/parameters/QueryEndDate"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "A paginated report object",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReportCost"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ReportCost"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized"
+                    },
+                    "403": {
+                        "description": "Feature flag disabled"
+                    },
+                    "500": {
+                        "description": "Unexpected Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            },
+                            "text/csv": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Error"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "basic_auth": []
+                    }
+                ]
+            }
+        },
         "/reports/openshift/resources/virtual-machines/": {
             "get": {
                 "tags": [

@@ -10,6 +10,7 @@ from api.common.permissions.openshift_access import OpenShiftAccessPermission
 from api.common.throttling import OcpTagQueryThrottle
 from api.models import Provider
 from api.report.ocp.query_handler import OCPReportQueryHandler
+from api.report.ocp.serializers import OCPAgentQueryParamSerializer
 from api.report.ocp.serializers import OCPCostQueryParamSerializer
 from api.report.ocp.serializers import OCPGpuQueryParamSerializer
 from api.report.ocp.serializers import OCPInventoryQueryParamSerializer
@@ -17,6 +18,7 @@ from api.report.ocp.serializers import OCPMigProfilesQueryParamSerializer
 from api.report.ocp.serializers import OCPVirtualMachinesQueryParamSerializer
 from api.report.view import ReportView
 from masu.processor import is_feature_flag_enabled_by_schema
+from masu.processor import OCP_AGENT_COST_MODEL_UNLEASH_FLAG
 from masu.processor import OCP_GPU_COST_MODEL_UNLEASH_FLAG
 
 
@@ -82,6 +84,22 @@ class OCPGpuView(OCPView):
         schema = request.user.customer.schema_name
 
         if not is_feature_flag_enabled_by_schema(schema, OCP_GPU_COST_MODEL_UNLEASH_FLAG, dev_fallback=True):
+            return Response(status=status.HTTP_403_FORBIDDEN)
+
+        return super().get(request, **kwargs)
+
+
+class OCPAgentView(OCPView):
+    """Get OpenShift agent cost data."""
+
+    report = "agents"
+    serializer = OCPAgentQueryParamSerializer
+
+    def get(self, request, **kwargs):
+        """Get agent report data with Unleash flag protection."""
+        schema = request.user.customer.schema_name
+
+        if not is_feature_flag_enabled_by_schema(schema, OCP_AGENT_COST_MODEL_UNLEASH_FLAG, dev_fallback=True):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         return super().get(request, **kwargs)

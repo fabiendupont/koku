@@ -18,6 +18,7 @@ TRINO_LINE_ITEM_TABLE_MAP = {
     "namespace_labels": "openshift_namespace_labels_line_items",
     "vm_usage": "openshift_vm_usage_line_items",
     "gpu_usage": "openshift_gpu_usage_line_items",
+    "agent_billing": "openshift_agent_billing_line_items",
 }
 
 TRINO_LINE_ITEM_TABLE_DAILY_MAP = {
@@ -27,6 +28,7 @@ TRINO_LINE_ITEM_TABLE_DAILY_MAP = {
     "namespace_labels": "openshift_namespace_labels_line_items_daily",
     "vm_usage": "openshift_vm_usage_line_items_daily",
     "gpu_usage": "openshift_gpu_usage_line_items_daily",
+    "agent_billing": "openshift_agent_billing_line_items_daily",
 }
 
 VIEWS = (
@@ -1034,6 +1036,67 @@ class OCPGpuSummaryP(models.Model):
     cost_model_memory_cost = models.DecimalField(max_digits=33, decimal_places=15, null=True)
     cost_model_volume_cost = models.DecimalField(max_digits=33, decimal_places=15, null=True)
     cost_model_rate_type = models.TextField(null=True)
+
+
+class OCPAgentCostSummaryP(models.Model):
+    """A summarized partitioned table for agent cost queries.
+
+    This table gives a daily breakdown of agentic AI invocation costs
+    aggregated from trace-based billing records.
+    """
+
+    class PartitionInfo:
+        partition_type = "RANGE"
+        partition_cols = ["usage_start"]
+
+    class Meta:
+        """Meta for OCPAgentCostSummaryP."""
+
+        db_table = "reporting_ocp_agent_cost_summary_p"
+        indexes = [
+            models.Index(fields=["usage_start"], name="ocpagentcost_usage_start"),
+            models.Index(fields=["cluster_id"], name="ocpagentcost_cluster_idx"),
+            models.Index(fields=["namespace"], name="ocpagentcost_namespace_idx"),
+            models.Index(fields=["agent_name"], name="ocpagentcost_agent_idx"),
+        ]
+
+    id = models.UUIDField(primary_key=True)
+    cluster_id = models.TextField()
+    cluster_alias = models.TextField(null=True)
+    namespace = models.CharField(max_length=253, null=True)
+    usage_start = models.DateField(null=False)
+    usage_end = models.DateField(null=False)
+
+    # Agent-specific fields
+    agent_name = models.CharField(max_length=253, null=True)
+    agent_id = models.CharField(max_length=253, null=True)
+    model_name = models.CharField(max_length=253, null=True)
+    organization = models.CharField(max_length=253, null=True)
+
+    # Token usage
+    input_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)
+    output_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)
+    cache_read_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)
+    total_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)
+
+    # Call counts
+    llm_call_count = models.IntegerField(null=True)
+    tool_call_count = models.IntegerField(null=True)
+    invocation_count = models.IntegerField(null=True)
+
+    # Duration
+    avg_duration_seconds = models.DecimalField(max_digits=15, decimal_places=6, null=True)
+
+    # Cost fields
+    cost_model_agent_cost = models.DecimalField(max_digits=33, decimal_places=15, null=True)
+    cost_model_rate_type = models.TextField(null=True)
+
+    # Metadata
+    source_uuid = models.ForeignKey(
+        "reporting.TenantAPIProvider", on_delete=models.CASCADE, unique=False, null=True, db_column="source_uuid"
+    )
+    cost_category = models.ForeignKey("OpenshiftCostCategory", on_delete=models.CASCADE, null=True)
+    raw_currency = models.TextField(null=True)
 
 
 # Import on-prem line item models so Django can discover them for migrations
