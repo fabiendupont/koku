@@ -1069,6 +1069,8 @@ class OCPInferenceTokenSummaryP(models.Model):
     model_name = models.CharField(max_length=253, null=True)
     inference_service = models.CharField(max_length=253, null=True)
     organization = models.CharField(max_length=253, null=True)
+    operation_name = models.CharField(max_length=253, null=True)
+    provider_name = models.CharField(max_length=253, null=True)
     input_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)
     output_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)
     total_tokens = models.DecimalField(max_digits=33, decimal_places=15, null=True)

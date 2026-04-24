@@ -167,6 +167,8 @@ The operator produces a CSV file per month:
 | `model_name` | string | LLM model identifier |
 | `inference_service` | string | KServe InferenceService name (from `serving.kserve.io/inferenceservice` pod label) |
 | `organization` | string | Organization identity (from X-Organization header or metric label) |
+| `operation_name` | string | OTel GenAI operation type (chat, embeddings, text_completion, invoke_agent, execute_tool) |
+| `provider_name` | string | OTel GenAI provider backend (openai, vllm, anthropic, aws.bedrock) |
 | `input_tokens` | decimal | Prompt tokens consumed |
 | `output_tokens` | decimal | Generation tokens produced |
 
@@ -195,6 +197,8 @@ File naming: `cm-openshift-inference-token-usage-YYYYMM.csv`
 | `model_name` | varchar | LLM model name |
 | `inference_service` | varchar | KServe InferenceService name |
 | `organization` | varchar | Organization identity (Keycloak realm / OSAC org) |
+| `operation_name` | varchar | OTel GenAI operation type (chat, embeddings, text_completion) |
+| `provider_name` | varchar | OTel GenAI provider backend (openai, vllm, anthropic) |
 | `input_tokens` | decimal | Total input tokens for the day |
 | `output_tokens` | decimal | Total output tokens for the day |
 | `total_tokens` | decimal | input + output tokens |
@@ -265,13 +269,15 @@ monthly_cost = Σ daily_cost = $25.00 × 30 = $750.00
 to be enabled (defaults to `True` in on-prem mode).
 
 **Group by options:** `cluster`, `node`, `project`,
-`model_name`, `inference_service`, `organization`
+`model_name`, `inference_service`, `organization`,
+`operation_name`, `provider_name`
 
 **Filter options:** `cluster`, `node`, `project`,
-`model_name`, `inference_service`, `organization`
+`model_name`, `inference_service`, `organization`,
+`operation_name`, `provider_name`
 
 **Order by options:** `date`, `model_name`,
-`inference_service`, `organization`,
+`inference_service`, `organization`, `operation_name`,
 `input_tokens`, `output_tokens`, `total_tokens`, `cost`
 
 ### Example Response
@@ -374,6 +380,33 @@ tenant identity — no additional tenant resolution layer
 is needed. See
 [Tenant Provider Model](tenant-provider-model.md)
 for details.
+
+---
+
+## OTel GenAI Dimensions
+
+When the OTel GenAI fallback source is active, two
+additional attributes from the `gen_ai.client.token.usage`
+metric are carried through to billing:
+
+| Dimension | OTel Attribute | Values | Billing Impact |
+|-----------|---------------|--------|---------------|
+| `operation_name` | `gen_ai.operation.name` | `chat`, `embeddings`, `text_completion`, `invoke_agent`, `execute_tool` | Different rates per operation type. Embeddings are typically 5-10x cheaper than chat completions. |
+| `provider_name` | `gen_ai.system` | `openai`, `vllm`, `anthropic`, `aws.bedrock` | Different rates per backend provider. Matters for multi-provider setups where cost varies by vendor. |
+
+These are standard OTel GenAI semantic convention attributes
+(see [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)).
+They are populated automatically when the koku-metrics-operator
+uses the OTel GenAI fallback query path. When using vLLM-native
+metrics (the primary path), these fields are NULL.
+
+Both fields are available as group-by and filter dimensions
+in the API, enabling queries like:
+
+```
+GET /reports/openshift/inference-tokens/?group_by[operation_name]=*
+GET /reports/openshift/inference-tokens/?filter[provider_name]=vllm&group_by[model_name]=*
+```
 
 ---
 

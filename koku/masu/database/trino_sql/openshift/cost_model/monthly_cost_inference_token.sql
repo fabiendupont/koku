@@ -28,11 +28,13 @@ SELECT
     tok.node as node,
     tok.model_name as resource_id,
     cast(map(
-        ARRAY['model-name', 'inference-service', 'organization', 'input-tokens', 'output-tokens'],
+        ARRAY['model-name', 'inference-service', 'organization', 'operation-name', 'provider-name', 'input-tokens', 'output-tokens'],
         ARRAY[
             tok.model_name,
             tok.inference_service,
             tok.organization,
+            tok.operation_name,
+            tok.provider_name,
             CAST(tok.input_tokens AS varchar),
             CAST(tok.output_tokens AS varchar)
         ]

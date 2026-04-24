@@ -31,6 +31,8 @@ SELECT
         'model-name', tok.model_name,
         'inference-service', tok.inference_service,
         'organization', tok.organization,
+        'operation-name', tok.operation_name,
+        'provider-name', tok.provider_name,
         'input-tokens', tok.input_tokens::varchar,
         'output-tokens', tok.output_tokens::varchar
     ) as all_labels,

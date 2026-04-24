@@ -278,6 +278,8 @@ class OCPProviderMap(ProviderMap):
                     "model_name": {"field": "model_name", "operation": "icontains"},
                     "inference_service": {"field": "inference_service", "operation": "icontains"},
                     "organization": {"field": "organization", "operation": "icontains"},
+                    "operation_name": {"field": "operation_name", "operation": "icontains"},
+                    "provider_name": {"field": "provider_name", "operation": "icontains"},
                     "infrastructures": {
                         "field": "cluster_id",
                         "operation": "exact",
@@ -1203,6 +1205,8 @@ class OCPProviderMap(ProviderMap):
                             "model_name",
                             "inference_service",
                             "organization",
+                            "operation_name",
+                            "provider_name",
                         ],
                         "tag_column": "all_labels",
                         "aggregates": {

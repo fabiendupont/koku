@@ -191,6 +191,26 @@ class OCPInferenceTokenViewTest(IamTestCase):
         self.assertIn("data", response.data)
 
     @patch("api.report.ocp.view.is_feature_flag_enabled_by_schema", return_value=True)
+    def test_group_by_operation_name(self, mock_unleash):
+        """Test inference token endpoint with group_by[operation_name]."""
+        url = reverse("reports-openshift-inference-tokens")
+        query_params = {"group_by[operation_name]": "*"}
+        url = url + "?" + urlencode(query_params, doseq=True)
+        response = self.client.get(url, **self.headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("data", response.data)
+
+    @patch("api.report.ocp.view.is_feature_flag_enabled_by_schema", return_value=True)
+    def test_filter_by_operation_name(self, mock_unleash):
+        """Test inference token endpoint with filter by operation_name."""
+        url = reverse("reports-openshift-inference-tokens")
+        query_params = {"filter[operation_name]": "chat"}
+        url = url + "?" + urlencode(query_params, doseq=True)
+        response = self.client.get(url, **self.headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("data", response.data)
+
+    @patch("api.report.ocp.view.is_feature_flag_enabled_by_schema", return_value=True)
     def test_accessible_when_unleash_flag_enabled(self, mock_unleash):
         """Test that inference token endpoint is accessible when Unleash flag is enabled."""
         url = reverse("reports-openshift-inference-tokens")
